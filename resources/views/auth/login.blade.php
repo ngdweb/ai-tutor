@@ -119,18 +119,26 @@
         }
         .input-icon svg { width: 17px; height: 17px; }
 
-        input[type="email"], input[type="password"] {
+        .input-wrap input,
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
             width: 100%;
             background: #fff;
             border: 1.5px solid #e2e8f0;
             border-radius: 10px;
-            padding: 12px 13px 12px 42px;
-            font-size: 14px; color: #1e293b;
+            padding: 12px 42px 12px 42px;
+            font-size: 14px;
+            color: #1e293b;
             font-family: inherit;
             transition: all 0.2s;
             outline: none;
+            display: block;
         }
-        input[type="email"]:focus, input[type="password"]:focus {
+        .input-wrap input:focus,
+        input[type="email"]:focus,
+        input[type="password"]:focus,
+        input[type="text"]:focus {
             border-color: #4f46e5;
             box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
         }
@@ -221,7 +229,7 @@
                 <div class="lp-feat-icon">
                     <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
                 </div>
-                <div class="lp-feat-text">SQLite — zero database config</div>
+                <div class="lp-feat-text">MySQL Database Supported</div>
             </div>
         </div>
     </div>
