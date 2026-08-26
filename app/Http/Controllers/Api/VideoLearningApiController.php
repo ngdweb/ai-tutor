@@ -27,7 +27,7 @@ class VideoLearningApiController extends Controller
             });
         }
 
-        $items = $query->orderBy('order_index', 'asc')->orderBy('updated_at', 'desc')->get();
+        $items = $query->orderBy('updated_at', 'desc')->orderBy('id', 'desc')->get();
 
         $formattedData = $items->map(function ($item) {
             return [

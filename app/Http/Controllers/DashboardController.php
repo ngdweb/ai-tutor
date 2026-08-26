@@ -24,7 +24,7 @@ class DashboardController extends Controller
             'total_orders'    => 284,
         ];
 
-        $recentVideoItems = VideoLearningWord::latest('id')->take(5)->get();
+        $recentVideoItems = VideoLearningWord::orderBy('updated_at', 'desc')->orderBy('id', 'desc')->take(5)->get();
 
         $recentActivity = [
             ['icon' => 'video', 'text' => "Video Learning module active ({$totalVideos} items)", 'time' => 'Live', 'color' => 'purple'],

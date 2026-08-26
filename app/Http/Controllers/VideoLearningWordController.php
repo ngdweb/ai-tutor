@@ -46,8 +46,8 @@ class VideoLearningWordController extends Controller
     public function index(Request $request): View
     {
         $items = $this->buildQuery($request)
-            ->orderBy('order_index', 'asc')
             ->orderBy('updated_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
 
@@ -66,8 +66,8 @@ class VideoLearningWordController extends Controller
     public function listAjax(Request $request): \Illuminate\Http\Response
     {
         $items = $this->buildQuery($request)
-            ->orderBy('order_index', 'asc')
             ->orderBy('updated_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
 
@@ -309,6 +309,7 @@ class VideoLearningWordController extends Controller
                         }
                         $item->json_data = $this->formatJson($jsonData);
                         $item->is_visible = $isVisible;
+                        $item->updated_at = now();
                         $item->save();
                         $updatedCount++;
                     }
@@ -414,6 +415,7 @@ class VideoLearningWordController extends Controller
 
         $item->json_data = $this->formatJson($request->input('json_data'));
         $item->is_visible = $request->has('is_visible') ? (bool)$request->input('is_visible') : $item->is_visible;
+        $item->updated_at = now();
 
         $item->save();
 

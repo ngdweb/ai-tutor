@@ -406,4 +406,55 @@ class VideoLearningWordTest extends TestCase
         $response->assertSee('URL:');
         $response->assertSee('Authorization');
     }
+
+    /**
+     * Test newly created and edited records appear first in both Web index and API response
+     */
+    public function test_latest_added_or_edited_records_appear_first_in_list_and_api()
+    {
+        $video1 = UploadedFile::fake()->create('item1.mp4', 500, 'video/mp4');
+        $video2 = UploadedFile::fake()->create('item2.mp4', 500, 'video/mp4');
+
+        $this->actingAs($this->user)->post(route('video-learning.store'), [
+            'title' => 'Alpha Item',
+            'video' => $video1,
+            'json_data' => '{"word": "Alpha"}',
+            'is_visible' => '1',
+        ]);
+        $this->actingAs($this->user)->post(route('video-learning.store'), [
+            'title' => 'Beta Item',
+            'video' => $video2,
+            'json_data' => '{"word": "Beta"}',
+            'is_visible' => '1',
+        ]);
+
+        $item1 = VideoLearningWord::where('title', 'Alpha Item')->first();
+        $item2 = VideoLearningWord::where('title', 'Beta Item')->first();
+
+        // 1. Initially Beta Item (created last) should be first
+        $indexResponse = $this->actingAs($this->user)->get(route('video-learning.index'));
+        $itemsInView = $indexResponse->viewData('items');
+        $this->assertEquals($item2->id, $itemsInView->first()->id);
+
+        $apiToken = env('API_TOKEN', 'IWGkI4GkjRt6fScJL1oBCCe7MYINeUGAjRiDnVMZmujUOtUbVx');
+        $apiResponse = $this->withHeader('Authorization', 'Bearer ' . $apiToken)->getJson('/api/video-learning-words');
+        $this->assertEquals($item2->id, $apiResponse->json('data.0.id'));
+
+        // 2. Now edit Alpha Item (item1). It should move to the first position!
+        sleep(1);
+        $this->actingAs($this->user)->post(route('video-learning.update', $item1->id), [
+            'title' => 'Alpha Item Updated',
+            'json_data' => '{"word": "Alpha Updated"}',
+            'is_visible' => '1',
+        ]);
+
+        $indexResponseAfterUpdate = $this->actingAs($this->user)->get(route('video-learning.index'));
+        $itemsInViewAfterUpdate = $indexResponseAfterUpdate->viewData('items');
+        $this->assertEquals($item1->id, $itemsInViewAfterUpdate->first()->id);
+
+        $apiResponseAfterUpdate = $this->withHeader('Authorization', 'Bearer ' . $apiToken)->getJson('/api/video-learning-words');
+        $this->assertEquals($item1->id, $apiResponseAfterUpdate->json('data.0.id'));
+
+        VideoLearningWord::all()->each->delete();
+    }
 }

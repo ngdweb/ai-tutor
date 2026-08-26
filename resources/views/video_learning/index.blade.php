@@ -729,7 +729,7 @@
             </button>
         </div>
         <div class="modal-body" style="padding: 16px;">
-            <pre id="jsonModalContent" style="background:#0f172a; color:#38bdf8; padding: 18px; border-radius: 12px; font-size: 13px; font-family: monospace; overflow-x: auto; max-height: 380px; white-space: pre-wrap; word-break: break-all; margin: 0;"></pre>
+            <pre id="jsonModalContent" style="background:#ffffff; color:#0f172a; border: 1px solid #e2e8f0; padding: 18px; border-radius: 12px; font-size: 13px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; overflow-x: auto; max-height: 380px; white-space: pre-wrap; word-break: break-all; margin: 0; line-height: 1.55; box-shadow: inset 0 1px 3px rgba(0,0,0,0.02);"></pre>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn-action btn-outline" onclick="copyJsonModalContent()">
@@ -933,18 +933,46 @@ function closeVideoPlayer() {
     closeModal('videoModal');
 }
 
+// JSON Syntax Highlighter (Clean Light / White Mode)
+function syntaxHighlightJson(json) {
+    if (typeof json !== 'string') {
+        json = JSON.stringify(json, undefined, 2);
+    }
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let style = 'color: #0284c7;';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                style = 'color: #4f46e5; font-weight: 700;'; // Indigo keys
+            } else {
+                style = 'color: #059669; font-weight: 500;'; // Emerald strings
+            }
+        } else if (/true|false/.test(match)) {
+            style = 'color: #d97706; font-weight: 700;'; // Amber booleans
+        } else if (/null/.test(match)) {
+            style = 'color: #94a3b8; font-style: italic;'; // Slate null
+        } else {
+            style = 'color: #ea580c; font-weight: 600;'; // Orange numbers
+        }
+        return '<span style="' + style + '">' + match + '</span>';
+    });
+}
+
 // JSON Modal
 function openJsonModal(id) {
     const raw = document.getElementById(`json-store-${id}`).value;
     let formatted = raw;
     try {
-        formatted = JSON.stringify(JSON.parse(raw), null, 2);
-    } catch (e) {}
-    document.getElementById('jsonModalContent').textContent = formatted;
+        const parsed = JSON.parse(raw);
+        formatted = JSON.stringify(parsed, null, 2);
+        document.getElementById('jsonModalContent').innerHTML = syntaxHighlightJson(formatted);
+    } catch (e) {
+        document.getElementById('jsonModalContent').textContent = formatted;
+    }
     openModal('jsonModal');
 }
 function copyJsonModalContent() {
-    const text = document.getElementById('jsonModalContent').textContent;
+    const text = document.getElementById('jsonModalContent').innerText || document.getElementById('jsonModalContent').textContent;
     navigator.clipboard.writeText(text).then(() => {
         showToast('JSON copied to clipboard!', 'success');
     });
