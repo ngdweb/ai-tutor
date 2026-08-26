@@ -439,7 +439,79 @@
         justify-content: space-between;
         border-top: 1px solid var(--border);
         background: var(--surface);
+        flex-wrap: wrap;
+        gap: 10px;
     }
+    /* Custom AJAX pagination buttons */
+    .ajax-pagination {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+    .ajax-pagination .page-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        color: var(--text-muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        user-select: none;
+    }
+    .ajax-pagination .page-btn:hover:not(.disabled):not(.active) {
+        background: var(--hover);
+        color: var(--text);
+        border-color: var(--primary);
+    }
+    .ajax-pagination .page-btn.active {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+        cursor: default;
+        pointer-events: none;
+    }
+    .ajax-pagination .page-btn.disabled {
+        opacity: 0.38;
+        cursor: default;
+        pointer-events: none;
+    }
+    /* Loading overlay for AJAX page change */
+    #tableWrapper {
+        position: relative;
+        min-height: 120px;
+    }
+    #tableWrapper.loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.45);
+        border-radius: 12px;
+        z-index: 10;
+    }
+    #tableWrapper.loading::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 34px;
+        height: 34px;
+        margin: -17px 0 0 -17px;
+        border: 3px solid var(--border);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        z-index: 11;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Modals Backdrop & Frame ── */
     .modal-backdrop {
@@ -599,14 +671,14 @@
             <input type="text" name="search" class="search-input" placeholder="Search by video filename or JSON..." value="{{ request('search') }}">
         </div>
 
-        <select name="status" class="select-filter" onchange="document.getElementById('filterForm').submit()">
+        <select name="status" class="select-filter">
             <option value="">All Statuses</option>
             <option value="show" {{ request('status') === 'show' ? 'selected' : '' }}>Show (Visible in API)</option>
             <option value="hide" {{ request('status') === 'hide' ? 'selected' : '' }}>Hide (Hidden in API)</option>
         </select>
 
         @if(request('search') || request('status'))
-            <a href="{{ route('video-learning.index') }}" class="btn-action btn-outline" style="padding: 8px 12px;" title="Reset filters">
+            <a href="{{ route('video-learning.index') }}" class="btn-action btn-outline reset-filter-btn" style="padding: 8px 12px;" title="Reset filters">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Reset
             </a>
@@ -623,112 +695,9 @@
     </div>
 </div>
 
-<!-- Main Table Card (Without 'Created' column) -->
-<div class="table-container">
-    @if($items->count() > 0)
-    <table class="data-table" id="sortableTable">
-        <thead>
-            <tr>
-                <th style="width: 38px; text-align: center;" title="Drag rows to reorder">↕</th>
-                <th style="width: 50px;">#</th>
-                <th style="width: 95px;">Thumbnail</th>
-                <th>Video File</th>
-                <th>JSON Data</th>
-                <th style="width: 140px;">API Visibility</th>
-                <th style="width: 100px; text-align: right;">Actions</th>
-            </tr>
-        </thead>
-        <tbody id="sortableTbody">
-            @foreach($items as $index => $item)
-            <tr id="row-{{ $item->id }}" class="sortable-row" draggable="true" data-id="{{ $item->id }}">
-                <td style="text-align: center;">
-                    <div class="drag-row-handle" title="Drag to reorder sequence">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
-                            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                            <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
-                        </svg>
-                    </div>
-                </td>
-                <td class="row-num" style="color: var(--text-muted); font-weight: 500;">
-                    {{ ($items->currentPage() - 1) * $items->perPage() + $loop->iteration }}
-                </td>
-                <td>
-                    <div class="thumb-wrap" onclick="openImageModal('{{ $item->thumbnail_url }}')" title="Click to enlarge thumbnail">
-                        <img src="{{ $item->thumbnail_url }}" alt="Thumbnail" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'76\' height=\'46\'><rect width=\'100%\' height=\'100%\' fill=\'%231e293b\'/><text x=\'50%\' y=\'50%\' fill=\'%2394a3b8\' text-anchor=\'middle\' dy=\'.3em\' font-size=\'10\'>No Image</text></svg>'">
-                        <div class="thumb-overlay-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-                        </div>
-                    </div>
-                </td>
-                <td>
-                    <div class="video-info-cell">
-                        <span class="video-file-tag">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            {{ Str::limit($item->video_name ?: basename($item->video_path), 40) }}
-                        </span>
-                        <button class="btn-play-trigger" onclick="openVideoPlayer('{{ $item->video_url }}', '{{ addslashes($item->video_name ?: basename($item->video_path)) }}')">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            Play Video
-                        </button>
-                    </div>
-                </td>
-                <td>
-                    <button class="json-badge-btn" onclick="openJsonModal({{ $item->id }})">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
-                        View JSON
-                    </button>
-                    <textarea id="json-store-{{ $item->id }}" style="display:none;">{{ $item->json_data }}</textarea>
-                </td>
-                <td>
-                    <label class="switch-toggle" title="Toggle visibility in API">
-                        <input type="checkbox" onchange="toggleVisibility({{ $item->id }}, this)" {{ $item->is_visible ? 'checked' : '' }}>
-                        <span class="switch-track"><span class="switch-thumb"></span></span>
-                        <span class="status-text-badge {{ $item->is_visible ? 'status-badge-visible' : 'status-badge-hidden' }}" id="status-badge-{{ $item->id }}">
-                            {{ $item->is_visible ? 'Show' : 'Hide' }}
-                        </span>
-                    </label>
-                </td>
-                <td>
-                    <div class="action-btn-group" style="justify-content: flex-end;">
-                        <!-- Dedicated Edit Screen Link -->
-                        <a href="{{ route('video-learning.edit', $item->id) }}" class="action-btn edit-btn" title="Edit Video Word">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </a>
-                        <button class="action-btn del-btn" onclick="openDeleteModal({{ $item->id }}, '{{ addslashes($item->video_name ?: basename($item->video_path)) }}')" title="Delete Video Word">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
-
-    <div class="pagination-bar">
-        <div style="font-size: 13px; color: var(--text-muted);">
-            Showing {{ $items->firstItem() ?? 0 }} to {{ $items->lastItem() ?? 0 }} of {{ $items->total() }} entries
-        </div>
-        <div>
-            {{ $items->links() }}
-        </div>
-    </div>
-    @else
-    <div class="empty-state">
-        <div class="empty-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="23 7 16 12 23 17 23 7"/>
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-            </svg>
-        </div>
-        <h3>No Video Learning records found</h3>
-        <p>Start by uploading video learning items with thumbnail and JSON data.</p>
-        <a href="{{ route('video-learning.create') }}" class="btn-action btn-primary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add New Video Word
-        </a>
-    </div>
-    @endif
+<!-- AJAX-rendered table+pagination wrapper -->
+<div id="tableWrapper">
+    @include('video_learning._list', ['items' => $items])
 </div>
 
 <!-- ======================================================== -->
@@ -819,11 +788,97 @@
 <script>
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 const REORDER_URL = "{{ route('video-learning.reorder') }}";
+const LIST_AJAX_URL = "{{ route('video-learning.list-ajax') }}";
 
-// Auto dismiss existing session toasts after strictly 5 seconds (5000ms)
+// ── AJAX Pagination ──────────────────────────────────────────
+// Reads current search/status params from the filter form,
+// fetches only the table partial, swaps it in, re-inits D&D.
+// URL in the address bar NEVER changes.
+function loadPage(page) {
+    const wrapper = document.getElementById('tableWrapper');
+    const form    = document.getElementById('filterForm');
+    const params  = new URLSearchParams(new FormData(form));
+    params.set('page', page);
+
+    wrapper.classList.add('loading');
+
+    fetch(LIST_AJAX_URL + '?' + params.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => {
+        if (!res.ok) throw new Error('Network error');
+        return res.text();
+    })
+    .then(html => {
+        wrapper.innerHTML = html;
+        wrapper.classList.remove('loading');
+        bindPaginationLinks();
+        initTableDragAndDrop();
+        // scroll table into view if needed
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    })
+    .catch(() => {
+        wrapper.classList.remove('loading');
+        showToast('Failed to load page. Please try again.', 'error');
+    });
+}
+
+// Attach click handlers to all .ajax-page links inside wrapper
+function bindPaginationLinks() {
+    document.querySelectorAll('#tableWrapper .ajax-page').forEach(link => {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            const page = parseInt(this.dataset.page, 10);
+            if (!isNaN(page)) loadPage(page);
+        });
+    });
+}
+
+// Also intercept filter form submit → load page 1 via AJAX
 document.addEventListener('DOMContentLoaded', () => {
-    const existingToasts = document.querySelectorAll('.toast');
-    existingToasts.forEach(toast => {
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        // Search input: debounce 400ms
+        const searchInput = filterForm.querySelector('input[name="search"]');
+        let debounceTimer;
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => loadPage(1), 400);
+            });
+            // Prevent default form submit on Enter
+            searchInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter') e.preventDefault();
+            });
+        }
+        // Status select already has onchange submit; override it
+        const statusSelect = filterForm.querySelector('select[name="status"]');
+        if (statusSelect) {
+            statusSelect.addEventListener('change', () => loadPage(1));
+        }
+        // Prevent normal form submit entirely
+        filterForm.addEventListener('submit', e => e.preventDefault());
+    }
+
+    // Reset button: clear inputs then reload page 1
+    document.querySelectorAll('.reset-filter-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.preventDefault();
+            const filterForm = document.getElementById('filterForm');
+            if (filterForm) {
+                filterForm.querySelector('input[name="search"]').value = '';
+                filterForm.querySelector('select[name="status"]').value = '';
+            }
+            loadPage(1);
+        });
+    });
+
+    // Bind initial pagination links and drag-and-drop
+    bindPaginationLinks();
+    initTableDragAndDrop();
+
+    // Auto dismiss session flash toasts
+    document.querySelectorAll('.toast').forEach(toast => {
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(16px)';
@@ -1010,8 +1065,7 @@ function saveTableReorder() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initTableDragAndDrop();
-});
+// initTableDragAndDrop is called from the main DOMContentLoaded block above
+// and re-called after each AJAX page swap.
 </script>
 @endsection

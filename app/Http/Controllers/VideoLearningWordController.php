@@ -13,13 +13,12 @@ use Illuminate\View\View;
 class VideoLearningWordController extends Controller
 {
     /**
-     * Display a listing of the resource with search, filter, and pagination.
+     * Build the base query with search + status filters.
      */
-    public function index(Request $request): View
+    private function buildQuery(Request $request)
     {
         $query = VideoLearningWord::query();
 
-        // Search by title or json content or video name
         if ($request->filled('search')) {
             $search = trim($request->get('search'));
             $query->where(function ($q) use ($search) {
@@ -29,7 +28,6 @@ class VideoLearningWordController extends Controller
             });
         }
 
-        // Filter by visibility / status
         if ($request->filled('status')) {
             $status = $request->get('status');
             if ($status === 'show' || $status === '1') {
@@ -39,9 +37,20 @@ class VideoLearningWordController extends Controller
             }
         }
 
-        $items = $query->orderBy('order_index', 'asc')->orderBy('updated_at', 'desc')->paginate(10)->withQueryString();
+        return $query;
+    }
 
-        // Statistics for summary badges
+    /**
+     * Display a listing of the resource with search, filter, and pagination.
+     */
+    public function index(Request $request): View
+    {
+        $items = $this->buildQuery($request)
+            ->orderBy('order_index', 'asc')
+            ->orderBy('updated_at', 'desc')
+            ->paginate(10)
+            ->withQueryString();
+
         $stats = [
             'total'   => VideoLearningWord::count(),
             'visible' => VideoLearningWord::where('is_visible', true)->count(),
@@ -49,6 +58,20 @@ class VideoLearningWordController extends Controller
         ];
 
         return view('video_learning.index', compact('items', 'stats'));
+    }
+
+    /**
+     * AJAX: return only the table+pagination partial (no route change).
+     */
+    public function listAjax(Request $request): \Illuminate\Http\Response
+    {
+        $items = $this->buildQuery($request)
+            ->orderBy('order_index', 'asc')
+            ->orderBy('updated_at', 'desc')
+            ->paginate(10)
+            ->withQueryString();
+
+        return response(view('video_learning._list', compact('items')));
     }
 
     /**

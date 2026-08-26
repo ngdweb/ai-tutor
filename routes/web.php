@@ -29,6 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/video-learning-words/{id}', [VideoLearningWordController::class, 'destroy'])->name('video-learning.destroy');
     Route::post('/video-learning-words/reorder', [VideoLearningWordController::class, 'reorder'])->name('video-learning.reorder');
     Route::patch('/video-learning-words/{id}/toggle-visibility', [VideoLearningWordController::class, 'toggleVisibility'])->name('video-learning.toggle-visibility');
+    Route::get('/video-learning-words-list', [VideoLearningWordController::class, 'listAjax'])->name('video-learning.list-ajax');
 
     // API List & Documentation Module
     Route::get('/api-list', [ApiListController::class, 'index'])->name('api-list.index');
