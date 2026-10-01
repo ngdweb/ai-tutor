@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\VideoLearningWord;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -15,8 +16,89 @@ class ApiListController extends Controller
     {
         $visibleCount = VideoLearningWord::where('is_visible', true)->count();
         $sampleRecord = VideoLearningWord::where('is_visible', true)->first();
+        $sampleCategory = Category::where('is_active', true)->first();
 
         $endpoints = [
+            [
+                'name'        => 'Get All Categories',
+                'method'      => 'GET',
+                'endpoint'    => '/api/categories',
+                'full_url'    => url('/api/categories'),
+                'description' => 'Fetches all active categories. Each category includes a preview of its latest 5 visible videos plus a total_videos count.',
+                'params'      => [],
+                'headers'     => [
+                    'Authorization' => 'Bearer <YOUR_API_TOKEN>',
+                    'Accept'        => 'application/json',
+                ],
+                'sample_response' => [
+                    'status'  => true,
+                    'message' => 'Categories fetched successfully.',
+                    'total'   => Category::where('is_active', true)->count(),
+                    'data'    => [
+                        [
+                            'id'           => $sampleCategory?->id ?? 1,
+                            'name'         => $sampleCategory?->name ?? 'General',
+                            'image_url'    => $sampleCategory?->image_url,
+                            'total_videos' => $sampleCategory ? $sampleCategory->videos()->where('is_visible', true)->count() : 0,
+                            'videos'       => [
+                                [
+                                    'id'            => $sampleRecord?->id ?? 1,
+                                    'category_id'   => $sampleRecord?->category_id ?? 1,
+                                    'video_url'     => $sampleRecord?->video_url ?? url('uploads/video_learning/videos/sample.mp4'),
+                                    'thumbnail_url' => $sampleRecord?->thumbnail_url ?? url('uploads/video_learning/thumbnails/sample.jpg'),
+                                    'json_data'     => $sampleRecord?->parsed_json ?? ['word' => 'Apple'],
+                                    'created_at'    => $sampleRecord?->created_at?->toIso8601String() ?? now()->toIso8601String(),
+                                    'updated_at'    => $sampleRecord?->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                                ]
+                            ],
+                        ]
+                    ]
+                ]
+            ],
+            [
+                'name'        => 'Get Category Videos (POST, category_id in body)',
+                'method'      => 'POST',
+                'endpoint'    => '/api/categories/videos',
+                'full_url'    => url('/api/categories/videos'),
+                'description' => 'Fetches ALL visible videos of a single category. Send category_id in the request body. Pass category_id = 0 to return every visible video across all categories. (The old GET /api/categories/{id} still works.)',
+                'params'      => [
+                    [
+                        'name'        => 'category_id',
+                        'type'        => 'integer (body)',
+                        'required'    => true,
+                        'description' => 'Category ID in the JSON body. Use 0 to fetch all videos from every category.'
+                    ]
+                ],
+                'headers'     => [
+                    'Authorization' => 'Bearer <YOUR_API_TOKEN>',
+                    'Accept'        => 'application/json',
+                    'Content-Type'  => 'application/json',
+                ],
+                'sample_body' => [
+                    'category_id' => $sampleCategory?->id ?? 1,
+                ],
+                'sample_response' => [
+                    'status'   => true,
+                    'message'  => 'Category videos fetched successfully.',
+                    'category' => [
+                        'id'        => $sampleCategory?->id ?? 1,
+                        'name'      => $sampleCategory?->name ?? 'General',
+                        'image_url' => $sampleCategory?->image_url,
+                    ],
+                    'total'    => $sampleCategory ? $sampleCategory->videos()->where('is_visible', true)->count() : 0,
+                    'data'     => [
+                        [
+                            'id'            => $sampleRecord?->id ?? 1,
+                            'category_id'   => $sampleRecord?->category_id ?? 1,
+                            'video_url'     => $sampleRecord?->video_url ?? url('uploads/video_learning/videos/sample.mp4'),
+                            'thumbnail_url' => $sampleRecord?->thumbnail_url ?? url('uploads/video_learning/thumbnails/sample.jpg'),
+                            'json_data'     => $sampleRecord?->parsed_json ?? ['word' => 'Apple'],
+                            'created_at'    => $sampleRecord?->created_at?->toIso8601String() ?? now()->toIso8601String(),
+                            'updated_at'    => $sampleRecord?->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                        ]
+                    ]
+                ]
+            ],
             [
                 'name'        => 'Get All Video Learning Words',
                 'method'      => 'GET',

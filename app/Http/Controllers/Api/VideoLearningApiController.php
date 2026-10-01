@@ -27,18 +27,38 @@ class VideoLearningApiController extends Controller
             });
         }
 
-        $items = $query->orderBy('updated_at', 'desc')->orderBy('id', 'desc')->get();
+        $query->orderBy('updated_at', 'desc')->orderBy('id', 'desc');
 
-        $formattedData = $items->map(function ($item) {
-            return [
-                'id'            => $item->id,
-                'video_url'     => $item->video_url,
-                'thumbnail_url' => $item->thumbnail_url,
-                'json_data'     => $item->parsed_json,
-                'created_at'    => $item->created_at?->toIso8601String(),
-                'updated_at'    => $item->updated_at?->toIso8601String(),
-            ];
-        });
+        $format = fn ($item) => [
+            'id'            => $item->id,
+            'video_url'     => $item->video_url,
+            'thumbnail_url' => $item->thumbnail_url,
+            'json_data'     => $item->parsed_json,
+            'created_at'    => $item->created_at?->toIso8601String(),
+            'updated_at'    => $item->updated_at?->toIso8601String(),
+        ];
+
+        // Optional, backward-compatible pagination: ?per_page=50&page=2 (capped at 200).
+        // Omit per_page to get the full list exactly as before.
+        if ($request->filled('per_page') && (int) $request->get('per_page') >= 1) {
+            $perPage = min((int) $request->get('per_page'), 200);
+            $paginator = $query->paginate($perPage);
+
+            return response()->json([
+                'status'     => true,
+                'message'    => 'Video learning word records fetched successfully.',
+                'total'      => $paginator->total(),
+                'pagination' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page'     => $paginator->perPage(),
+                    'last_page'    => $paginator->lastPage(),
+                    'total'        => $paginator->total(),
+                ],
+                'data'       => $paginator->getCollection()->map($format)->values(),
+            ], 200);
+        }
+
+        $formattedData = $query->get()->map($format);
 
         return response()->json([
             'status'  => true,

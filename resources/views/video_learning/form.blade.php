@@ -39,6 +39,53 @@
         letter-spacing: -0.3px;
     }
 
+    /* ── Category Selector Card ── */
+    .category-select-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+        padding: 18px 22px;
+        margin-bottom: 22px;
+    }
+    .category-select-inner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+    }
+    .category-select-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+    }
+    .category-select-label svg { color: var(--primary); }
+    .category-select-input {
+        min-width: 260px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text);
+        outline: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .category-select-input:focus {
+        border-color: var(--primary);
+        background: var(--surface);
+        box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+    }
+    .category-select-hint {
+        font-size: 12.5px;
+        color: var(--text-muted);
+    }
+
     /* ── Record Cards List ── */
     .records-container {
         display: flex;
@@ -481,6 +528,31 @@
 <form action="{{ $isEdit ? route('video-learning.update', $record->id) : route('video-learning.store') }}" method="POST" enctype="multipart/form-data" id="batchVideoForm">
     @csrf
 
+    <!-- Category Selector (applies to all record(s) in this submission) -->
+    <div class="category-select-card">
+        <div class="category-select-inner">
+            <label for="category_id" class="category-select-label">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Category
+            </label>
+            <select name="category_id" id="category_id" class="category-select-input">
+                @php
+                    $currentCat = old('category_id', $isEdit ? ($record->category_id ?? null) : null);
+                    $generalId  = optional(($categories ?? collect())->firstWhere('name', 'General'))->id;
+                    $selectedCat = $currentCat ?: $generalId;
+                @endphp
+                @forelse(($categories ?? []) as $cat)
+                    <option value="{{ $cat->id }}" {{ (string) $selectedCat === (string) $cat->id ? 'selected' : '' }}>
+                        {{ $cat->name }}{{ $cat->is_active ? '' : ' (Off)' }}
+                    </option>
+                @empty
+                    <option value="">General</option>
+                @endforelse
+            </select>
+            <span class="category-select-hint">All record(s) added here will be saved under this category.</span>
+        </div>
+    </div>
+
     <div class="records-container" id="recordsContainer">
 
         @if($isEdit)
@@ -548,6 +620,15 @@
                         <span class="preview-badge" id="thumb_badge_0">Current Thumbnail</span>
                         <img id="thumb_img_0" src="{{ $record->thumbnail_url }}" alt="Thumbnail">
                     </div>
+                </div>
+
+                <!-- Episode No. (Optional) -->
+                <div class="form-group col-span-2">
+                    <label class="form-label">
+                        <span>Episode No.</span>
+                        <span class="optional">Optional — numbers only</span>
+                    </label>
+                    <input type="number" name="records[0][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" value="{{ $record->episode_no }}" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                 </div>
 
                 <!-- 3. JSON Data -->
@@ -638,6 +719,15 @@
                         <span class="preview-badge" id="thumb_badge_0">Thumbnail Preview</span>
                         <img id="thumb_img_0" src="" alt="Thumbnail preview">
                     </div>
+                </div>
+
+                <!-- Episode No. (Optional) -->
+                <div class="form-group col-span-2">
+                    <label class="form-label">
+                        <span>Episode No.</span>
+                        <span class="optional">Optional — numbers only</span>
+                    </label>
+                    <input type="number" name="records[0][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                 </div>
 
                 <!-- 3. JSON Data -->
@@ -767,6 +857,15 @@ function addNewRecordCard() {
                         <span class="preview-badge" id="thumb_badge_${idx}">Thumbnail Preview</span>
                         <img id="thumb_img_${idx}" src="" alt="Thumbnail preview">
                     </div>
+                </div>
+
+                <!-- Episode No. (Optional) -->
+                <div class="form-group col-span-2">
+                    <label class="form-label">
+                        <span>Episode No.</span>
+                        <span class="optional">Optional — numbers only</span>
+                    </label>
+                    <input type="number" name="records[${idx}][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                 </div>
 
                 <!-- 3. JSON Data -->

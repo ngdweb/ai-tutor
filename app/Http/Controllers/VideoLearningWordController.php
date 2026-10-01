@@ -17,7 +17,12 @@ class VideoLearningWordController extends Controller
      */
     private function buildQuery(Request $request)
     {
-        $query = VideoLearningWord::query();
+        $query = VideoLearningWord::query()->with('category');
+
+        // Optional filter by category.
+        if ($request->filled('category_id') && (string) $request->get('category_id') !== '0') {
+            $query->where('category_id', (int) $request->get('category_id'));
+        }
 
         if ($request->filled('search')) {
             $search = trim($request->get('search'));
@@ -57,7 +62,46 @@ class VideoLearningWordController extends Controller
             'hidden'  => VideoLearningWord::where('is_visible', false)->count(),
         ];
 
-        return view('video_learning.index', compact('items', 'stats'));
+        $categories = \App\Models\Category::orderBy('order_index')->orderBy('name')->get();
+
+        return view('video_learning.index', compact('items', 'stats', 'categories'));
+    }
+
+    /**
+     * AJAX: return a single category's videos (ordered by saved sequence) for the
+     * "Set Index" reorder popup.
+     */
+    public function categoryVideos(int $categoryId): JsonResponse
+    {
+        // Cap how many rows the reorder popup loads so a huge category can never
+        // stall the browser; only the columns needed are selected (no longText json).
+        $limit = 500;
+
+        $base = VideoLearningWord::where('category_id', $categoryId)
+            ->orderBy('order_index', 'asc')
+            ->orderBy('updated_at', 'desc')
+            ->orderBy('id', 'desc');
+
+        $total = (clone $base)->count();
+
+        $videos = $base->limit($limit)
+            ->get(['id', 'category_id', 'title', 'episode_no', 'video_name', 'video_path', 'thumbnail_path', 'is_visible', 'order_index'])
+            ->map(fn ($v) => [
+                'id'            => $v->id,
+                'title'         => $v->title,
+                'episode_no'    => $v->episode_no,
+                'video_name'    => $v->video_name ?: basename($v->video_path),
+                'thumbnail_url' => $v->thumbnail_url,
+                'is_visible'    => $v->is_visible,
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'total'   => $total,
+            'limited' => $total > $limit,
+            'limit'   => $limit,
+            'data'    => $videos,
+        ]);
     }
 
     /**
@@ -71,7 +115,17 @@ class VideoLearningWordController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return response(view('video_learning._list', compact('items')));
+        // The whole index view is evaluated; return only the table fragment.
+        $stats = [
+            'total'   => VideoLearningWord::count(),
+            'visible' => VideoLearningWord::where('is_visible', true)->count(),
+            'hidden'  => VideoLearningWord::where('is_visible', false)->count(),
+        ];
+        $categories = \App\Models\Category::orderBy('order_index')->orderBy('name')->get();
+
+        return response(
+            view('video_learning.index', compact('items', 'stats', 'categories'))->fragment('videoTable')
+        );
     }
 
     /**
@@ -79,7 +133,8 @@ class VideoLearningWordController extends Controller
      */
     public function create(): View
     {
-        return view('video_learning.form');
+        $categories = \App\Models\Category::orderBy('order_index')->orderBy('name')->get();
+        return view('video_learning.form', compact('categories'));
     }
 
     /**
@@ -88,7 +143,8 @@ class VideoLearningWordController extends Controller
     public function edit(int $id): View
     {
         $record = VideoLearningWord::findOrFail($id);
-        return view('video_learning.form', compact('record'));
+        $categories = \App\Models\Category::orderBy('order_index')->orderBy('name')->get();
+        return view('video_learning.form', compact('record', 'categories'));
     }
 
     /**
@@ -96,7 +152,11 @@ class VideoLearningWordController extends Controller
      */
     public function store(Request $request): RedirectResponse|JsonResponse
     {
-        $this->ensureDirectoriesExist();
+        // Category applies to every record in this submission (falls back to General).
+        // Files are stored under uploads/video_learning_with_word/<category>/{videos,thumbnails}.
+        $categoryId  = $this->resolveCategoryId($request);
+        $videoRelDir = $this->videoDir($categoryId);
+        $thumbRelDir = $this->thumbDir($categoryId);
 
         // Check if multiple records array is submitted
         if ($request->has('records') && is_array($request->input('records'))) {
@@ -109,6 +169,7 @@ class VideoLearningWordController extends Controller
                 $autoThumbBase64 = $row['auto_thumbnail_base64'] ?? null;
                 $jsonData = $row['json_data'] ?? '{}';
                 $titleInput = $row['title'] ?? null;
+                $episodeNo = $this->normalizeEpisodeNo($row['episode_no'] ?? null);
                 $isVisible = isset($row['is_visible']) && ($row['is_visible'] === '1' || $row['is_visible'] === true || $row['is_visible'] === 1);
 
                 if (!$videoFile) {
@@ -123,29 +184,31 @@ class VideoLearningWordController extends Controller
                 $videoExt = $videoFile->getClientOriginalExtension() ?: 'mp4';
                 $videoCleanName = Str::slug(pathinfo($originalVideoName, PATHINFO_FILENAME));
 
-                $videoFileName = 'video_' . time() . '_' . Str::random(6) . ($videoCleanName ? '_' . $videoCleanName : '') . '.' . $videoExt;
-                $videoFile->move(public_path('uploads/video_learning/videos'), $videoFileName);
-                $videoRelativePath = 'uploads/video_learning/videos/' . $videoFileName;
+                $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
+                $videoFile->move(public_path($videoRelDir), $videoFileName);
+                $videoRelativePath = $videoRelDir . '/' . $videoFileName;
 
                 // Handle Thumbnail
                 $thumbnailRelativePath = null;
                 if ($thumbFile) {
                     $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
-                    $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.' . $thumbExt;
-                    $thumbFile->move(public_path('uploads/video_learning/thumbnails'), $thumbFileName);
-                    $thumbnailRelativePath = 'uploads/video_learning/thumbnails/' . $thumbFileName;
+                    $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
+                    $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
+                    $thumbnailRelativePath = $thumbRelDir . '/' . $thumbFileName;
                 } elseif (!empty($autoThumbBase64)) {
-                    $thumbnailRelativePath = $this->saveBase64Image($autoThumbBase64);
+                    $thumbnailRelativePath = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
                 }
 
                 if (!$thumbnailRelativePath) {
-                    $thumbnailRelativePath = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video');
+                    $thumbnailRelativePath = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video', $thumbRelDir);
                 }
 
                 $title = $titleInput ?: ($videoCleanName ? ucwords(str_replace('-', ' ', $videoCleanName)) : 'Untitled Video');
 
                 VideoLearningWord::create([
+                    'category_id'    => $categoryId,
                     'title'          => $title,
+                    'episode_no'     => $episodeNo,
                     'video_path'     => $videoRelativePath,
                     'video_name'     => $originalVideoName,
                     'thumbnail_path' => $thumbnailRelativePath,
@@ -182,30 +245,32 @@ class VideoLearningWordController extends Controller
         $videoExt = $videoFile->getClientOriginalExtension() ?: 'mp4';
         $videoCleanName = Str::slug(pathinfo($originalVideoName, PATHINFO_FILENAME));
         
-        $videoFileName = 'video_' . time() . '_' . Str::random(6) . ($videoCleanName ? '_' . $videoCleanName : '') . '.' . $videoExt;
-        $videoFile->move(public_path('uploads/video_learning/videos'), $videoFileName);
-        $videoRelativePath = 'uploads/video_learning/videos/' . $videoFileName;
+        $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
+        $videoFile->move(public_path($videoRelDir), $videoFileName);
+        $videoRelativePath = $videoRelDir . '/' . $videoFileName;
 
         $thumbnailRelativePath = null;
         if ($request->hasFile('thumbnail')) {
             $thumbFile = $request->file('thumbnail');
             $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
-            $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.' . $thumbExt;
-            $thumbFile->move(public_path('uploads/video_learning/thumbnails'), $thumbFileName);
-            $thumbnailRelativePath = 'uploads/video_learning/thumbnails/' . $thumbFileName;
+            $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
+            $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
+            $thumbnailRelativePath = $thumbRelDir . '/' . $thumbFileName;
         } elseif ($request->filled('auto_thumbnail_base64')) {
-            $thumbnailRelativePath = $this->saveBase64Image($request->input('auto_thumbnail_base64'));
+            $thumbnailRelativePath = $this->saveBase64Image($request->input('auto_thumbnail_base64'), $thumbRelDir);
         }
 
         if (!$thumbnailRelativePath) {
-            $thumbnailRelativePath = $this->generateDefaultThumbnail($request->input('title') ?: $videoCleanName ?: 'Video');
+            $thumbnailRelativePath = $this->generateDefaultThumbnail($request->input('title') ?: $videoCleanName ?: 'Video', $thumbRelDir);
         }
 
         $title = $request->input('title') ?: ($videoCleanName ? ucwords(str_replace('-', ' ', $videoCleanName)) : 'Untitled Video');
         $isVisible = $request->has('is_visible') ? (bool)$request->input('is_visible') : true;
 
         VideoLearningWord::create([
+            'category_id'    => $categoryId,
             'title'          => $title,
+            'episode_no'     => $this->normalizeEpisodeNo($request->input('episode_no')),
             'video_path'     => $videoRelativePath,
             'video_name'     => $originalVideoName,
             'thumbnail_path' => $thumbnailRelativePath,
@@ -250,7 +315,11 @@ class VideoLearningWordController extends Controller
      */
     public function update(Request $request, int $id): RedirectResponse|JsonResponse
     {
-        $this->ensureDirectoriesExist();
+        // Category applies to every record touched in this submission (falls back to General).
+        // Files are stored under uploads/video_learning_with_word/<category>/{videos,thumbnails}.
+        $categoryId  = $this->resolveCategoryId($request);
+        $videoRelDir = $this->videoDir($categoryId);
+        $thumbRelDir = $this->thumbDir($categoryId);
 
         // Check if multiple records array is submitted in edit page
         if ($request->has('records') && is_array($request->input('records'))) {
@@ -265,6 +334,7 @@ class VideoLearningWordController extends Controller
                 $autoThumbBase64 = $row['auto_thumbnail_base64'] ?? null;
                 $jsonData = $row['json_data'] ?? '{}';
                 $titleInput = $row['title'] ?? null;
+                $episodeNo = $this->normalizeEpisodeNo($row['episode_no'] ?? null);
                 $isVisible = isset($row['is_visible']) && ($row['is_visible'] === '1' || $row['is_visible'] === true || $row['is_visible'] === 1);
 
                 if (!$this->isValidJson($jsonData)) {
@@ -276,37 +346,40 @@ class VideoLearningWordController extends Controller
                     $item = VideoLearningWord::find($rowId);
                     if ($item) {
                         if ($videoFile) {
-                            if ($item->video_path && File::exists(public_path($item->video_path))) {
-                                File::delete(public_path($item->video_path));
-                            }
                             $originalVideoName = $videoFile->getClientOriginalName();
                             $videoExt = $videoFile->getClientOriginalExtension() ?: 'mp4';
                             $videoCleanName = Str::slug(pathinfo($originalVideoName, PATHINFO_FILENAME));
-                            $videoFileName = 'video_' . time() . '_' . Str::random(6) . ($videoCleanName ? '_' . $videoCleanName : '') . '.' . $videoExt;
-                            $videoFile->move(public_path('uploads/video_learning/videos'), $videoFileName);
+                            $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
+                            $videoFile->move(public_path($videoRelDir), $videoFileName);
 
-                            $item->video_path = 'uploads/video_learning/videos/' . $videoFileName;
+                            $this->deleteFileAndCleanup($item->video_path);
+
+                            $item->video_path = $videoRelDir . '/' . $videoFileName;
                             $item->video_name = $originalVideoName;
                         }
 
                         if ($thumbFile) {
-                            if ($item->thumbnail_path && File::exists(public_path($item->thumbnail_path))) {
-                                File::delete(public_path($item->thumbnail_path));
-                            }
                             $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
-                            $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.' . $thumbExt;
-                            $thumbFile->move(public_path('uploads/video_learning/thumbnails'), $thumbFileName);
-                            $item->thumbnail_path = 'uploads/video_learning/thumbnails/' . $thumbFileName;
+                            $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
+                            $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
+
+                            $this->deleteFileAndCleanup($item->thumbnail_path);
+
+                            $item->thumbnail_path = $thumbRelDir . '/' . $thumbFileName;
                         } elseif (!empty($autoThumbBase64)) {
-                            if ($item->thumbnail_path && File::exists(public_path($item->thumbnail_path))) {
-                                File::delete(public_path($item->thumbnail_path));
-                            }
-                            $item->thumbnail_path = $this->saveBase64Image($autoThumbBase64);
+                            $newThumb = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
+                            $this->deleteFileAndCleanup($item->thumbnail_path);
+                            $item->thumbnail_path = $newThumb;
                         }
 
                         if ($titleInput) {
                             $item->title = $titleInput;
                         }
+                        $item->episode_no = $episodeNo;
+                        $item->category_id = $categoryId;
+                        // Keep files in the correct category folder when the category was changed.
+                        $item->video_path = $this->relocateToCategory($item->video_path, $videoRelDir);
+                        $item->thumbnail_path = $this->relocateToCategory($item->thumbnail_path, $thumbRelDir);
                         $item->json_data = $this->formatJson($jsonData);
                         $item->is_visible = $isVisible;
                         $item->updated_at = now();
@@ -320,26 +393,28 @@ class VideoLearningWordController extends Controller
                         $videoExt = $videoFile->getClientOriginalExtension() ?: 'mp4';
                         $videoCleanName = Str::slug(pathinfo($originalVideoName, PATHINFO_FILENAME));
 
-                        $videoFileName = 'video_' . time() . '_' . Str::random(6) . ($videoCleanName ? '_' . $videoCleanName : '') . '.' . $videoExt;
-                        $videoFile->move(public_path('uploads/video_learning/videos'), $videoFileName);
-                        $videoRelativePath = 'uploads/video_learning/videos/' . $videoFileName;
+                        $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
+                        $videoFile->move(public_path($videoRelDir), $videoFileName);
+                        $videoRelativePath = $videoRelDir . '/' . $videoFileName;
 
                         $thumbnailRelativePath = null;
                         if ($thumbFile) {
                             $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
-                            $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.' . $thumbExt;
-                            $thumbFile->move(public_path('uploads/video_learning/thumbnails'), $thumbFileName);
-                            $thumbnailRelativePath = 'uploads/video_learning/thumbnails/' . $thumbFileName;
+                            $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
+                            $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
+                            $thumbnailRelativePath = $thumbRelDir . '/' . $thumbFileName;
                         } elseif (!empty($autoThumbBase64)) {
-                            $thumbnailRelativePath = $this->saveBase64Image($autoThumbBase64);
+                            $thumbnailRelativePath = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
                         }
 
                         if (!$thumbnailRelativePath) {
-                            $thumbnailRelativePath = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video');
+                            $thumbnailRelativePath = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video', $thumbRelDir);
                         }
 
                         VideoLearningWord::create([
+                            'category_id'    => $categoryId,
                             'title'          => $titleInput ?: ($videoCleanName ? ucwords(str_replace('-', ' ', $videoCleanName)) : 'Untitled Video'),
+                            'episode_no'     => $episodeNo,
                             'video_path'     => $videoRelativePath,
                             'video_name'     => $originalVideoName,
                             'thumbnail_path' => $thumbnailRelativePath,
@@ -375,44 +450,45 @@ class VideoLearningWordController extends Controller
         }
 
         if ($request->hasFile('video')) {
-            if ($item->video_path && File::exists(public_path($item->video_path))) {
-                File::delete(public_path($item->video_path));
-            }
-
             $videoFile = $request->file('video');
             $originalVideoName = $videoFile->getClientOriginalName();
             $videoExt = $videoFile->getClientOriginalExtension() ?: 'mp4';
             $videoCleanName = Str::slug(pathinfo($originalVideoName, PATHINFO_FILENAME));
 
-            $videoFileName = 'video_' . time() . '_' . Str::random(6) . ($videoCleanName ? '_' . $videoCleanName : '') . '.' . $videoExt;
-            $videoFile->move(public_path('uploads/video_learning/videos'), $videoFileName);
+            $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
+            $videoFile->move(public_path($videoRelDir), $videoFileName);
 
-            $item->video_path = 'uploads/video_learning/videos/' . $videoFileName;
+            // Remove the previous file only after the new one is safely stored.
+            $this->deleteFileAndCleanup($item->video_path);
+
+            $item->video_path = $videoRelDir . '/' . $videoFileName;
             $item->video_name = $originalVideoName;
         }
 
         if ($request->hasFile('thumbnail')) {
-            if ($item->thumbnail_path && File::exists(public_path($item->thumbnail_path))) {
-                File::delete(public_path($item->thumbnail_path));
-            }
-
             $thumbFile = $request->file('thumbnail');
             $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
-            $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.' . $thumbExt;
-            $thumbFile->move(public_path('uploads/video_learning/thumbnails'), $thumbFileName);
+            $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
+            $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
 
-            $item->thumbnail_path = 'uploads/video_learning/thumbnails/' . $thumbFileName;
+            $this->deleteFileAndCleanup($item->thumbnail_path);
+
+            $item->thumbnail_path = $thumbRelDir . '/' . $thumbFileName;
         } elseif ($request->filled('auto_thumbnail_base64')) {
-            if ($item->thumbnail_path && File::exists(public_path($item->thumbnail_path))) {
-                File::delete(public_path($item->thumbnail_path));
-            }
-            $item->thumbnail_path = $this->saveBase64Image($request->input('auto_thumbnail_base64'));
+            $newThumb = $this->saveBase64Image($request->input('auto_thumbnail_base64'), $thumbRelDir);
+            $this->deleteFileAndCleanup($item->thumbnail_path);
+            $item->thumbnail_path = $newThumb;
         }
 
         if ($request->filled('title')) {
             $item->title = $request->input('title');
         }
 
+        $item->episode_no = $this->normalizeEpisodeNo($request->input('episode_no'));
+        $item->category_id = $categoryId;
+        // Keep files in the correct category folder when the category was changed.
+        $item->video_path = $this->relocateToCategory($item->video_path, $videoRelDir);
+        $item->thumbnail_path = $this->relocateToCategory($item->thumbnail_path, $thumbRelDir);
         $item->json_data = $this->formatJson($request->input('json_data'));
         $item->is_visible = $request->has('is_visible') ? (bool)$request->input('is_visible') : $item->is_visible;
         $item->updated_at = now();
@@ -481,9 +557,39 @@ class VideoLearningWordController extends Controller
     }
 
     /**
-     * Save base64 image string to public/uploads/video_learning/thumbnails
+     * Resolve the category id for this submission. Uses the submitted
+     * category_id when valid, otherwise falls back to the default "General"
+     * category so no video is ever left without a category.
      */
-    private function saveBase64Image(string $base64Data): ?string
+    /**
+     * Normalize an episode number input: integer when a non-negative number is
+     * provided, otherwise null (the field is optional).
+     */
+    private function normalizeEpisodeNo($value): ?int
+    {
+        if ($value === null || $value === '' || !is_numeric($value)) {
+            return null;
+        }
+
+        $int = (int) $value;
+        return $int >= 0 ? $int : null;
+    }
+
+    private function resolveCategoryId(Request $request): ?int
+    {
+        $categoryId = $request->input('category_id');
+
+        if ($categoryId && \App\Models\Category::whereKey($categoryId)->exists()) {
+            return (int) $categoryId;
+        }
+
+        return \App\Models\Category::where('name', 'General')->value('id');
+    }
+
+    /**
+     * Save base64 image string into the given category's thumbnails folder.
+     */
+    private function saveBase64Image(string $base64Data, string $thumbRelDir): ?string
     {
         try {
             if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
@@ -501,22 +607,25 @@ class VideoLearningWordController extends Controller
                 return null;
             }
 
+            $this->ensureDir($thumbRelDir);
             $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.' . $type;
-            $destination = public_path('uploads/video_learning/thumbnails/' . $thumbFileName);
+            $destination = public_path($thumbRelDir . '/' . $thumbFileName);
 
             File::put($destination, $decoded);
 
-            return 'uploads/video_learning/thumbnails/' . $thumbFileName;
+            return $thumbRelDir . '/' . $thumbFileName;
         } catch (\Throwable $e) {
             return null;
         }
     }
 
     /**
-     * Generate default thumbnail using PHP GD library
+     * Generate default thumbnail using PHP GD library into the given folder.
      */
-    private function generateDefaultThumbnail(string $text): string
+    private function generateDefaultThumbnail(string $text, string $thumbRelDir): string
     {
+        $this->ensureDir($thumbRelDir);
+
         $width = 640;
         $height = 360;
 
@@ -555,12 +664,12 @@ class VideoLearningWordController extends Controller
         imagestring($img, 3, ($width - $badgeWidth) / 2, $centerY + 85, $badgeText, $muted);
 
         $thumbFileName = 'thumb_' . time() . '_' . Str::random(6) . '.jpg';
-        $destination = public_path('uploads/video_learning/thumbnails/' . $thumbFileName);
+        $destination = public_path($thumbRelDir . '/' . $thumbFileName);
 
         imagejpeg($img, $destination, 90);
         imagedestroy($img);
 
-        return 'uploads/video_learning/thumbnails/' . $thumbFileName;
+        return $thumbRelDir . '/' . $thumbFileName;
     }
 
     /**
@@ -586,19 +695,137 @@ class VideoLearningWordController extends Controller
     }
 
     /**
-     * Ensure upload folders exist in public/uploads/
+     * Base relative folder for a category:
+     *   uploads/video_learning_with_word/<category-name>
      */
-    private function ensureDirectoriesExist(): void
+    private function categoryBasePath(?int $categoryId): string
     {
-        $videoDir = public_path('uploads/video_learning/videos');
-        $thumbDir = public_path('uploads/video_learning/thumbnails');
+        $name = \App\Models\Category::whereKey($categoryId)->value('name') ?? 'General';
+        $slug = Str::slug($name) ?: 'general';
 
-        if (!File::isDirectory($videoDir)) {
-            File::makeDirectory($videoDir, 0755, true, true);
+        return 'uploads/video_learning_with_word/' . $slug;
+    }
+
+    /**
+     * Relative "videos" directory for a category (created if missing).
+     */
+    private function videoDir(?int $categoryId): string
+    {
+        return $this->ensureDir($this->categoryBasePath($categoryId) . '/videos');
+    }
+
+    /**
+     * Relative "thumbnails" directory for a category (created if missing).
+     */
+    private function thumbDir(?int $categoryId): string
+    {
+        return $this->ensureDir($this->categoryBasePath($categoryId) . '/thumbnails');
+    }
+
+    /**
+     * Build a storage file name for an uploaded file, keeping its ORIGINAL name.
+     * If a file with the same name already exists in the same (category) folder,
+     * a timestamp is appended so nothing is overwritten:
+     *   lesson.mp4  ->  lesson.mp4            (first time)
+     *   lesson.mp4  ->  lesson_1790000000.mp4 (name already present)
+     */
+    private function uniqueUploadName($file, string $relDir, string $fallbackExt): string
+    {
+        $ext  = strtolower($file->getClientOriginalExtension() ?: $fallbackExt);
+        $base = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) ?: 'file';
+
+        $fileName = $base . '.' . $ext;
+
+        if (File::exists(public_path($relDir . '/' . $fileName))) {
+            $fileName = $base . '_' . time() . '.' . $ext;
+
+            // Guard against a rare same-second collision.
+            if (File::exists(public_path($relDir . '/' . $fileName))) {
+                $fileName = $base . '_' . time() . '_' . Str::random(4) . '.' . $ext;
+            }
         }
 
-        if (!File::isDirectory($thumbDir)) {
-            File::makeDirectory($thumbDir, 0755, true, true);
+        return $fileName;
+    }
+
+    /**
+     * Delete a stored file (by relative path) and clean up its folder if empty.
+     */
+    private function deleteFileAndCleanup(?string $relPath): void
+    {
+        if (!$relPath || str_starts_with($relPath, 'http')) {
+            return;
         }
+
+        $abs = public_path($relPath);
+        if (File::exists($abs)) {
+            File::delete($abs);
+            VideoLearningWord::cleanupEmptyFolders([dirname($abs)]);
+        }
+    }
+
+    /**
+     * Move an already-stored file into the given category folder when its
+     * current folder differs (e.g. the record's category was changed on edit).
+     * Cleans up the old folder if it becomes empty. Returns the new relative path.
+     */
+    private function relocateToCategory(?string $relPath, string $targetRelDir): ?string
+    {
+        if (!$relPath || str_starts_with($relPath, 'http')) {
+            return $relPath;
+        }
+
+        $currentDir = trim(str_replace('\\', '/', dirname($relPath)), '/');
+        if ($currentDir === trim($targetRelDir, '/')) {
+            return $relPath; // already in the correct category folder
+        }
+
+        $src = public_path($relPath);
+        if (!File::exists($src)) {
+            return $relPath; // nothing physical to move
+        }
+
+        $this->ensureDir($targetRelDir);
+        $fileName = $this->uniqueNameInDir($targetRelDir, basename($relPath));
+        File::move($src, public_path($targetRelDir . '/' . $fileName));
+
+        VideoLearningWord::cleanupEmptyFolders([dirname($src)]);
+
+        return $targetRelDir . '/' . $fileName;
+    }
+
+    /**
+     * Ensure a plain file name is unique inside a relative directory,
+     * appending a timestamp on collision.
+     */
+    private function uniqueNameInDir(string $relDir, string $fileName): string
+    {
+        if (!File::exists(public_path($relDir . '/' . $fileName))) {
+            return $fileName;
+        }
+
+        $ext  = pathinfo($fileName, PATHINFO_EXTENSION);
+        $base = pathinfo($fileName, PATHINFO_FILENAME);
+        $dot  = $ext ? '.' . $ext : '';
+
+        $candidate = $base . '_' . time() . $dot;
+        if (File::exists(public_path($relDir . '/' . $candidate))) {
+            $candidate = $base . '_' . time() . '_' . Str::random(4) . $dot;
+        }
+
+        return $candidate;
+    }
+
+    /**
+     * Ensure a relative public directory exists; returns the relative path.
+     */
+    private function ensureDir(string $relativeDir): string
+    {
+        $dir = public_path($relativeDir);
+        if (!File::isDirectory($dir)) {
+            File::makeDirectory($dir, 0755, true, true);
+        }
+
+        return $relativeDir;
     }
 }

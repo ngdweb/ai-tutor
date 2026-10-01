@@ -202,6 +202,15 @@
 
         <div class="nav-section-title" style="margin-top:14px;">Modules</div>
 
+        <a href="{{ route('categories.index') }}" class="nav-item {{ request()->routeIs('categories.*') ? 'active' : '' }}">
+            <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+            </span>
+            Categories
+        </a>
+
         <a href="{{ route('video-learning.index') }}" class="nav-item {{ request()->routeIs('video-learning.*') ? 'active' : '' }}">
             <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -274,6 +283,8 @@ function closeSidebar() {
     document.getElementById('overlay').classList.remove('visible');
 }
 </script>
+<!-- SweetAlert2 for confirmation dialogs -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @yield('scripts')
 </body>
 </html>

@@ -134,8 +134,8 @@ class VideoLearningWordTest extends TestCase
 
         $item = VideoLearningWord::first();
         $this->assertNotNull($item);
-        $this->assertStringContainsString('video_', $item->video_path);
-        $this->assertStringContainsString('thumb_', $item->thumbnail_path);
+        $this->assertStringContainsString('/videos/', $item->video_path);
+        $this->assertStringContainsString('/thumbnails/', $item->thumbnail_path);
         $this->assertTrue(File::exists(public_path($item->video_path)));
         $this->assertTrue(File::exists(public_path($item->thumbnail_path)));
 

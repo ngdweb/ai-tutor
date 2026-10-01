@@ -513,6 +513,24 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Category tag in table */
+    .category-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 600; max-width: 100%; }
+    .category-tag svg { flex-shrink: 0; }
+
+    /* Set Index reorder list */
+    .vreorder-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .vreorder-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); cursor: grab; transition: background 0.15s, box-shadow 0.15s, opacity 0.15s; }
+    .vreorder-item:hover { background: #f5f3ff; border-color: #ddd6fe; }
+    .vreorder-item.dragging { opacity: 0.45; background: #ede9fe; cursor: grabbing; }
+    .vreorder-item.drag-over { border-top: 2px solid var(--primary); }
+    .vreorder-grip { color: var(--text-muted); display: flex; }
+    .vreorder-seq { min-width: 24px; height: 24px; border-radius: 6px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+    .vreorder-thumb { width: 30px; height: 44px; border-radius: 6px; overflow: hidden; background: #0f172a; flex-shrink: 0; border: 1px solid var(--border); }
+    .vreorder-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .vreorder-name { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vreorder-ep { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 12px; background: #fef3c7; color: #b45309; white-space: nowrap; }
+    .vreorder-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 12px; }
+
     /* ── Modals Backdrop & Frame ── */
     .modal-backdrop {
         position: fixed;
@@ -677,7 +695,14 @@
             <option value="hide" {{ request('status') === 'hide' ? 'selected' : '' }}>Hide (Hidden in API)</option>
         </select>
 
-        @if(request('search') || request('status'))
+        <select name="category_id" class="select-filter">
+            <option value="">All Categories</option>
+            @foreach($categories as $cat)
+                <option value="{{ $cat->id }}" {{ (string) request('category_id') === (string) $cat->id ? 'selected' : '' }}>{{ $cat->name }}</option>
+            @endforeach
+        </select>
+
+        @if(request('search') || request('status') || request('category_id'))
             <a href="{{ route('video-learning.index') }}" class="btn-action btn-outline reset-filter-btn" style="padding: 8px 12px;" title="Reset filters">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Reset
@@ -685,7 +710,11 @@
         @endif
     </form>
 
-    <div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button type="button" class="btn-action btn-outline" onclick="openVideoReorderModal()" title="Set video sequence by category">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/><polyline points="17 10 21 14 17 18"/></svg>
+            Set Index
+        </button>
         <a href="{{ route('video-learning.create') }}" class="btn-action btn-primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -697,7 +726,145 @@
 
 <!-- AJAX-rendered table+pagination wrapper -->
 <div id="tableWrapper">
-    @include('video_learning._list', ['items' => $items])
+    @fragment('videoTable')
+    <!-- Main Table Card (AJAX-refreshable fragment) -->
+    <div class="table-container">
+        @if($items->count() > 0)
+        <table class="data-table" id="sortableTable">
+            <thead>
+                <tr>
+                    <th style="width: 38px; text-align: center;" title="Drag rows to reorder">↕</th>
+                    <th style="width: 50px;">#</th>
+                    <th style="width: 95px;">Thumbnail</th>
+                    <th>Video File</th>
+                    <th style="width: 140px;">Category</th>
+                    <th>JSON Data</th>
+                    <th style="width: 140px;">API Visibility</th>
+                    <th style="width: 100px; text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="sortableTbody">
+                @foreach($items as $index => $item)
+                <tr id="row-{{ $item->id }}" class="sortable-row" draggable="true" data-id="{{ $item->id }}">
+                    <td style="text-align: center;">
+                        <div class="drag-row-handle" title="Drag to reorder sequence">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
+                                <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                                <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
+                            </svg>
+                        </div>
+                    </td>
+                    <td class="row-num" style="color: var(--text-muted); font-weight: 500;">
+                        {{ ($items->currentPage() - 1) * $items->perPage() + $loop->iteration }}
+                    </td>
+                    <td>
+                        <div class="thumb-wrap" onclick="openImageModal('{{ $item->thumbnail_url }}')" title="Click to enlarge thumbnail">
+                            <img src="{{ $item->thumbnail_url }}" alt="Thumbnail" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'76\' height=\'46\'><rect width=\'100%\' height=\'100%\' fill=\'%231e293b\'/><text x=\'50%\' y=\'50%\' fill=\'%2394a3b8\' text-anchor=\'middle\' dy=\'.3em\' font-size=\'10\'>No Image</text></svg>'">
+                            <div class="thumb-overlay-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="video-info-cell">
+                            <span class="video-file-tag">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                {{ Str::limit($item->video_name ?: basename($item->video_path), 40) }}
+                            </span>
+                            <button class="btn-play-trigger" onclick="openVideoPlayer('{{ $item->video_url }}', '{{ addslashes($item->video_name ?: basename($item->video_path)) }}')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                Play Video
+                            </button>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="category-tag">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            {{ $item->category?->name ?? '—' }}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="json-badge-btn" onclick="openJsonModal({{ $item->id }})">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
+                            View JSON
+                        </button>
+                        <textarea id="json-store-{{ $item->id }}" style="display:none;">{{ $item->json_data }}</textarea>
+                    </td>
+                    <td>
+                        <label class="switch-toggle" title="Toggle visibility in API">
+                            <input type="checkbox" onchange="toggleVisibility({{ $item->id }}, this)" {{ $item->is_visible ? 'checked' : '' }}>
+                            <span class="switch-track"><span class="switch-thumb"></span></span>
+                            <span class="status-text-badge {{ $item->is_visible ? 'status-badge-visible' : 'status-badge-hidden' }}" id="status-badge-{{ $item->id }}">
+                                {{ $item->is_visible ? 'Show' : 'Hide' }}
+                            </span>
+                        </label>
+                    </td>
+                    <td>
+                        <div class="action-btn-group" style="justify-content: flex-end;">
+                            <!-- Dedicated Edit Screen Link -->
+                            <a href="{{ route('video-learning.edit', $item->id) }}" class="action-btn edit-btn" title="Edit Video Word">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </a>
+                            <button class="action-btn del-btn" onclick="confirmDeleteVideo({{ $item->id }}, '{{ addslashes($item->video_name ?: basename($item->video_path)) }}')" title="Delete Video Word">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+
+        <div class="pagination-bar">
+            <div style="font-size: 13px; color: var(--text-muted);">
+                Showing {{ $items->firstItem() ?? 0 }} to {{ $items->lastItem() ?? 0 }} of {{ $items->total() }} entries
+            </div>
+            @if($items->hasPages())
+            <nav class="ajax-pagination" aria-label="Pagination">
+                {{-- Previous --}}
+                @if($items->onFirstPage())
+                    <span class="page-btn disabled">&lsaquo; Prev</span>
+                @else
+                    <a href="{{ $items->previousPageUrl() }}" class="page-btn ajax-page" data-page="{{ $items->currentPage() - 1 }}">&lsaquo; Prev</a>
+                @endif
+
+                {{-- Numbered pages --}}
+                @foreach($items->getUrlRange(1, $items->lastPage()) as $page => $url)
+                    @if($page == $items->currentPage())
+                        <span class="page-btn active">{{ $page }}</span>
+                    @else
+                        <a href="{{ $url }}" class="page-btn ajax-page" data-page="{{ $page }}">{{ $page }}</a>
+                    @endif
+                @endforeach
+
+                {{-- Next --}}
+                @if($items->hasMorePages())
+                    <a href="{{ $items->nextPageUrl() }}" class="page-btn ajax-page" data-page="{{ $items->currentPage() + 1 }}">Next &rsaquo;</a>
+                @else
+                    <span class="page-btn disabled">Next &rsaquo;</span>
+                @endif
+            </nav>
+            @endif
+        </div>
+        @else
+        <div class="empty-state">
+            <div class="empty-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="23 7 16 12 23 17 23 7"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+            </div>
+            <h3>No Video Learning records found</h3>
+            <p>Start by uploading video learning items with thumbnail and JSON data.</p>
+            <a href="{{ route('video-learning.create') }}" class="btn-action btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add New Video Word
+            </a>
+        </div>
+        @endif
+    </div>
+    @endfragment
 </div>
 
 <!-- ======================================================== -->
@@ -753,31 +920,36 @@
 </div>
 
 <!-- ======================================================== -->
-<!-- MODAL: DELETE CONFIRMATION                                -->
+<!-- MODAL: SET INDEX (per-category video reorder)             -->
 <!-- ======================================================== -->
-<div class="modal-backdrop" id="deleteModal">
-    <div class="modal-card" style="max-width: 440px;">
-        <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
-            <div style="width: 42px; height: 42px; border-radius: 12px; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center;">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+<div class="modal-backdrop" id="videoReorderModal">
+    <div class="modal-card" style="max-width: 560px;">
+        <div class="modal-header" style="border-bottom: 1px solid var(--border);">
+            <div>
+                <div style="font-size: 16px; font-weight: 700; color: var(--text);">Set Video Index</div>
+                <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">Pick a category, then drag videos to set their order. This sequence is used in the API response.</div>
             </div>
-            <button class="modal-close-btn" onclick="closeModal('deleteModal')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button class="modal-close-btn" onclick="closeModal('videoReorderModal')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="modal-body" style="padding: 16px 20px;">
+            <label style="display:block; font-size:12.5px; font-weight:600; color:var(--text); margin-bottom:8px;">Category</label>
+            <select id="reorderCategorySelect" class="select-filter" style="width:100%; margin-bottom:16px;" onchange="loadCategoryVideosForReorder(this.value)">
+                <option value="">— Choose a category —</option>
+                @foreach($categories as $cat)
+                    <option value="{{ $cat->id }}">{{ $cat->name }}{{ $cat->is_active ? '' : ' (Off)' }}</option>
+                @endforeach
+            </select>
+
+            <div id="reorderVideoListWrap" style="max-height: 52vh; overflow-y:auto;">
+                <div style="text-align:center; color:var(--text-muted); font-size:13px; padding:24px 0;">Choose a category to load its videos.</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-action btn-outline" onclick="closeModal('videoReorderModal')">Close</button>
+            <button type="button" class="btn-action btn-primary" id="saveVideoReorderBtn" onclick="saveVideoReorder()" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Sequence
             </button>
-        </div>
-        <div class="modal-body" style="padding-top: 10px;">
-            <h3 style="font-size: 16px; font-weight: 700; color: var(--text);">Delete Video Learning Record?</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
-                Are you sure you want to delete <strong id="deleteItemTitle" style="color:var(--text);"></strong>? This will delete the record and its physical video and thumbnail files from storage.
-            </p>
-        </div>
-        <div class="modal-footer" style="background: transparent; border-top: none;">
-            <form action="" method="POST" id="deleteForm">
-                @csrf
-                @method('DELETE')
-                <button type="button" class="btn-action btn-outline" onclick="closeModal('deleteModal')">Cancel</button>
-                <button type="submit" class="btn-action" style="background: #ef4444; color: #fff;">Delete Permanently</button>
-            </form>
         </div>
     </div>
 </div>
@@ -856,6 +1028,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusSelect) {
             statusSelect.addEventListener('change', () => loadPage(1));
         }
+        // Category filter
+        const categorySelect = filterForm.querySelector('select[name="category_id"]');
+        if (categorySelect) {
+            categorySelect.addEventListener('change', () => loadPage(1));
+        }
         // Prevent normal form submit entirely
         filterForm.addEventListener('submit', e => e.preventDefault());
     }
@@ -868,6 +1045,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (filterForm) {
                 filterForm.querySelector('input[name="search"]').value = '';
                 filterForm.querySelector('select[name="status"]').value = '';
+                const catSel = filterForm.querySelector('select[name="category_id"]');
+                if (catSel) catSel.value = '';
             }
             loadPage(1);
         });
@@ -984,11 +1163,36 @@ function openImageModal(url) {
     openModal('imageModal');
 }
 
-// Delete Confirmation
-function openDeleteModal(id, title) {
-    document.getElementById('deleteItemTitle').textContent = `"${title || 'this item'}"`;
-    document.getElementById('deleteForm').action = `{{ url('/video-learning-words') }}/${id}`;
-    openModal('deleteModal');
+// Submit a hidden DELETE form to a given action URL.
+function submitDeleteForm(action) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = action;
+    form.innerHTML = `
+        <input type="hidden" name="_token" value="${CSRF_TOKEN}">
+        <input type="hidden" name="_method" value="DELETE">
+    `;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Delete Confirmation — single SweetAlert for Video Learning records
+function confirmDeleteVideo(id, title) {
+    Swal.fire({
+        title: 'Delete this video?',
+        html: `Are you sure you want to delete <b>"${title || 'this item'}"</b>?<br>This will also remove its video and thumbnail files.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, delete it',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            submitDeleteForm(`{{ url('/video-learning-words') }}/${id}`);
+        }
+    });
 }
 
 // Instant AJAX Toggle Visibility
@@ -1095,5 +1299,117 @@ function saveTableReorder() {
 
 // initTableDragAndDrop is called from the main DOMContentLoaded block above
 // and re-called after each AJAX page swap.
+
+// ── Set Index: per-category video reorder popup ──
+const CATEGORY_VIDEOS_URL = "{{ url('/video-learning-words/category') }}"; // + /{id}/videos
+let draggedVReorderItem = null;
+
+function openVideoReorderModal() {
+    // reset
+    document.getElementById('reorderCategorySelect').value = '';
+    document.getElementById('reorderVideoListWrap').innerHTML =
+        '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:24px 0;">Choose a category to load its videos.</div>';
+    document.getElementById('saveVideoReorderBtn').disabled = true;
+    openModal('videoReorderModal');
+}
+
+function loadCategoryVideosForReorder(categoryId) {
+    const wrap = document.getElementById('reorderVideoListWrap');
+    const saveBtn = document.getElementById('saveVideoReorderBtn');
+    if (!categoryId) {
+        wrap.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:24px 0;">Choose a category to load its videos.</div>';
+        saveBtn.disabled = true;
+        return;
+    }
+
+    wrap.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:24px 0;">Loading…</div>';
+
+    fetch(`${CATEGORY_VIDEOS_URL}/${categoryId}/videos`, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(data => {
+            const videos = (data && data.data) ? data.data : [];
+            if (!videos.length) {
+                wrap.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:24px 0;">No videos in this category.</div>';
+                saveBtn.disabled = true;
+                return;
+            }
+            const ph = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='44'><rect width='100%' height='100%' fill='%231e293b'/></svg>";
+            const items = videos.map((v, i) => `
+                <li class="vreorder-item" draggable="true" data-id="${v.id}">
+                    <span class="vreorder-grip"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg></span>
+                    <span class="vreorder-seq">${i + 1}</span>
+                    <span class="vreorder-thumb"><img src="${v.thumbnail_url || ph}" onerror="this.src='${ph}'" alt=""></span>
+                    <span class="vreorder-name">${(v.video_name || v.title || 'Untitled').replace(/</g,'&lt;')}</span>
+                    ${(v.episode_no !== null && v.episode_no !== undefined) ? `<span class="vreorder-ep">Ep ${v.episode_no}</span>` : ''}
+                    <span class="vreorder-badge ${v.is_visible ? 'status-badge-visible' : 'status-badge-hidden'}">${v.is_visible ? 'Show' : 'Hide'}</span>
+                </li>`).join('');
+            const note = data.limited
+                ? `<div style="font-size:12px; color:#b45309; background:#fef3c7; border-radius:8px; padding:8px 10px; margin-bottom:10px;">Showing the first ${data.limit} of ${data.total} videos. Reordering applies to these.</div>`
+                : '';
+            wrap.innerHTML = note + `<ul class="vreorder-list" id="vreorderList">${items}</ul>`;
+            saveBtn.disabled = false;
+            initVReorderDragDrop();
+        })
+        .catch(() => {
+            wrap.innerHTML = '<div style="text-align:center; color:#ef4444; font-size:13px; padding:24px 0;">Failed to load videos.</div>';
+            saveBtn.disabled = true;
+        });
+}
+
+function refreshVReorderSeq() {
+    document.querySelectorAll('#vreorderList .vreorder-item').forEach((li, idx) => {
+        const seq = li.querySelector('.vreorder-seq');
+        if (seq) seq.textContent = idx + 1;
+    });
+}
+
+function initVReorderDragDrop() {
+    const list = document.getElementById('vreorderList');
+    if (!list) return;
+    list.querySelectorAll('.vreorder-item').forEach(item => {
+        item.addEventListener('dragstart', () => { draggedVReorderItem = item; item.classList.add('dragging'); });
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            draggedVReorderItem = null;
+            list.querySelectorAll('.vreorder-item').forEach(i => i.classList.remove('drag-over'));
+            refreshVReorderSeq();
+        });
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!draggedVReorderItem || draggedVReorderItem === item) return;
+            const rect = item.getBoundingClientRect();
+            const after = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+            list.insertBefore(draggedVReorderItem, after ? item.nextSibling : item);
+        });
+    });
+}
+
+function saveVideoReorder() {
+    const btn = document.getElementById('saveVideoReorderBtn');
+    const ids = Array.from(document.querySelectorAll('#vreorderList .vreorder-item')).map(i => parseInt(i.dataset.id, 10));
+    if (!ids.length) return;
+
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+
+    fetch(REORDER_URL, {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_ids: ids })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        if (data.success) {
+            showToast('Category video sequence saved!', 'success');
+            closeModal('videoReorderModal');
+            loadPage(1); // refresh the main table
+        } else {
+            showToast('Could not save sequence.', 'error');
+        }
+    })
+    .catch(() => { btn.disabled = false; btn.style.opacity = '1'; showToast('Network error while saving sequence.', 'error'); });
+}
 </script>
 @endsection
