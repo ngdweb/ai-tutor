@@ -36,6 +36,31 @@ class CategoryTest extends TestCase
         ]);
     }
 
+    public function test_dashboard_shows_category_stats()
+    {
+        Category::create(['name' => 'DashCat', 'is_active' => true, 'order_index' => 1]);
+
+        $response = $this->actingAs($this->user)->get(route('dashboard'));
+        $response->assertStatus(200)
+            ->assertSee('Categories')
+            ->assertSee(route('categories.index'));
+    }
+
+    public function test_video_form_episode_input_disables_scroll()
+    {
+        // create form and edit form both carry the onwheel guard on the episode input
+        $create = $this->actingAs($this->user)->get(route('video-learning.create'));
+        $create->assertStatus(200)->assertSee('onwheel="this.blur()"', false);
+    }
+
+    public function test_category_form_has_drag_drop_hooks()
+    {
+        $response = $this->actingAs($this->user)->get(route('categories.create'));
+        $response->assertStatus(200)
+            ->assertSee('id="imageDrop"', false)
+            ->assertSee('id="imageInput"', false);
+    }
+
     public function test_general_category_exists_after_migration()
     {
         $this->assertDatabaseHas('categories', ['name' => 'General']);
@@ -165,6 +190,30 @@ class CategoryTest extends TestCase
         $response->assertOk();
         $this->assertNull($response->json('category'));
         $this->assertEquals(7, $response->json('total')); // all videos across all categories
+    }
+
+    public function test_categories_api_excludes_categories_with_no_videos()
+    {
+        $withVideos = Category::create(['name' => 'HasVideos', 'is_active' => true, 'order_index' => 1]);
+        $empty      = Category::create(['name' => 'EmptyOne', 'is_active' => true, 'order_index' => 2]);
+        $this->makeVideo($withVideos->id);
+        // $empty has no videos.
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->token)->getJson('/api/categories');
+
+        $names = collect($response->json('data'))->pluck('name')->all();
+        $this->assertContains('HasVideos', $names);
+        $this->assertNotContains('EmptyOne', $names);
+    }
+
+    public function test_categories_api_excludes_category_with_only_hidden_videos()
+    {
+        $cat = Category::create(['name' => 'OnlyHidden', 'is_active' => true, 'order_index' => 1]);
+        $this->makeVideo($cat->id, false); // hidden video only
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->token)->getJson('/api/categories');
+        $names = collect($response->json('data'))->pluck('name')->all();
+        $this->assertNotContains('OnlyHidden', $names);
     }
 
     public function test_categories_api_hides_inactive_category()
@@ -378,6 +427,11 @@ class CategoryTest extends TestCase
         $general = Category::where('name', 'General')->first();
         $a = Category::create(['name' => 'Alpha', 'is_active' => true, 'order_index' => 1]);
         $b = Category::create(['name' => 'Beta', 'is_active' => true, 'order_index' => 2]);
+
+        // Each category needs at least one visible video to appear in the API.
+        $this->makeVideo($general->id);
+        $this->makeVideo($a->id);
+        $this->makeVideo($b->id);
 
         // Save a specific sequence: Beta, General, Alpha
         $this->actingAs($this->user)->postJson(route('categories.reorder'), [

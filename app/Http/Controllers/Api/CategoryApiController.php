@@ -22,8 +22,10 @@ class CategoryApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        // Single query for all counts (no N+1): visible video count per category.
+        // Only active categories that have at least one visible video are returned;
+        // empty categories are excluded. Single query for counts (no N+1).
         $categories = Category::where('is_active', true)
+            ->whereHas('videos', fn ($q) => $q->where('is_visible', true))
             ->withCount(['videos as total_videos' => fn ($q) => $q->where('is_visible', true)])
             ->orderBy('order_index', 'asc')
             ->orderBy('id', 'desc')

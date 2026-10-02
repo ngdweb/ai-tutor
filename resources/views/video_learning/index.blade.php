@@ -519,13 +519,13 @@
 
     /* Set Index reorder list */
     .vreorder-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .vreorder-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); cursor: grab; transition: background 0.15s, box-shadow 0.15s, opacity 0.15s; }
+    .vreorder-item { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); cursor: grab; transition: background 0.15s, box-shadow 0.15s, opacity 0.15s; }
     .vreorder-item:hover { background: #f5f3ff; border-color: #ddd6fe; }
     .vreorder-item.dragging { opacity: 0.45; background: #ede9fe; cursor: grabbing; }
     .vreorder-item.drag-over { border-top: 2px solid var(--primary); }
     .vreorder-grip { color: var(--text-muted); display: flex; }
     .vreorder-seq { min-width: 24px; height: 24px; border-radius: 6px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
-    .vreorder-thumb { width: 30px; height: 44px; border-radius: 6px; overflow: hidden; background: #0f172a; flex-shrink: 0; border: 1px solid var(--border); }
+    .vreorder-thumb { width: 32px; height: 46px; border-radius: 6px; overflow: hidden; background: #0f172a; flex-shrink: 0; border: 1px solid var(--border); }
     .vreorder-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .vreorder-name { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vreorder-ep { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 12px; background: #fef3c7; color: #b45309; white-space: nowrap; }
@@ -923,7 +923,7 @@
 <!-- MODAL: SET INDEX (per-category video reorder)             -->
 <!-- ======================================================== -->
 <div class="modal-backdrop" id="videoReorderModal">
-    <div class="modal-card" style="max-width: 560px;">
+    <div class="modal-card" style="max-width: 680px; width: 92%;">
         <div class="modal-header" style="border-bottom: 1px solid var(--border);">
             <div>
                 <div style="font-size: 16px; font-weight: 700; color: var(--text);">Set Video Index</div>
@@ -940,7 +940,7 @@
                 @endforeach
             </select>
 
-            <div id="reorderVideoListWrap" style="max-height: 52vh; overflow-y:auto;">
+            <div id="reorderVideoListWrap" style="max-height: 62vh; min-height: 180px; overflow-y:auto;">
                 <div style="text-align:center; color:var(--text-muted); font-size:13px; padding:24px 0;">Choose a category to load its videos.</div>
             </div>
         </div>

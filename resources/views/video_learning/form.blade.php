@@ -628,7 +628,7 @@
                         <span>Episode No.</span>
                         <span class="optional">Optional — numbers only</span>
                     </label>
-                    <input type="number" name="records[0][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" value="{{ $record->episode_no }}" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="number" name="records[0][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" value="{{ $record->episode_no }}" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onwheel="this.blur()">
                 </div>
 
                 <!-- 3. JSON Data -->
@@ -727,7 +727,7 @@
                         <span>Episode No.</span>
                         <span class="optional">Optional — numbers only</span>
                     </label>
-                    <input type="number" name="records[0][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="number" name="records[0][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onwheel="this.blur()">
                 </div>
 
                 <!-- 3. JSON Data -->
@@ -865,7 +865,7 @@ function addNewRecordCard() {
                         <span>Episode No.</span>
                         <span class="optional">Optional — numbers only</span>
                     </label>
-                    <input type="number" name="records[${idx}][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="number" name="records[${idx}][episode_no]" class="form-input" min="0" step="1" inputmode="numeric" placeholder="e.g. 1" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onwheel="this.blur()">
                 </div>
 
                 <!-- 3. JSON Data -->

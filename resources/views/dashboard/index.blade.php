@@ -136,6 +136,21 @@
 <!-- Stat Cards -->
 <div class="stats-grid">
     <div class="stat-card">
+        <div class="stat-icon" style="background:#ccfbf1; color:#0d9488;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+        </div>
+        <div>
+            <div class="stat-value">{{ $stats['total_categories'] }}</div>
+            <div class="stat-label">Categories</div>
+            <span class="stat-badge">
+                <a href="{{ route('categories.index') }}" style="color:inherit; text-decoration:none;">{{ $stats['active_categories'] }} active →</a>
+            </span>
+        </div>
+    </div>
+
+    <div class="stat-card">
         <div class="stat-icon ic-indigo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="23 7 16 12 23 17 23 7"/>
@@ -231,7 +246,7 @@
                     <img src="{{ $v->thumbnail_url }}" alt="{{ $v->title }}" style="width:36px; height:24px; border-radius:4px; object-fit:cover; background:#0f172a;" onerror="this.style.display='none'">
                     <div>
                         <div style="font-size:13.5px; font-weight:600; color:var(--text);">{{ $v->title }}</div>
-                        <div style="font-size:11.5px; color:var(--text-muted);">{{ $v->created_at?->diffForHumans() }}</div>
+                        <div style="font-size:11.5px; color:var(--text-muted);">{{ $v->category?->name ?? '—' }} · {{ $v->created_at?->diffForHumans() }}</div>
                     </div>
                 </div>
                 <span class="panel-chip {{ $v->is_visible ? 'green' : '' }}" style="font-size:10.5px;">

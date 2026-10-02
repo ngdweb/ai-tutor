@@ -28,6 +28,7 @@
     /* Image upload */
     .image-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.18s; background: var(--surface2); }
     .image-drop:hover { border-color: var(--primary); background: #f5f3ff; }
+    .image-drop.dragover { border-color: var(--primary); background: #ede9fe; transform: scale(1.01); }
     .image-drop input { display: none; }
     .image-preview-wrap { display: flex; align-items: center; gap: 16px; }
     .image-preview { width: 90px; height: 90px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border); background: #0f172a; display: none; }
@@ -81,8 +82,8 @@
                 <label class="form-label">Category Image</label>
                 <div class="image-preview-wrap">
                     <img id="imagePreview" class="image-preview {{ $isEdit && $record->image_url ? 'show' : '' }}" src="{{ $isEdit && $record->image_url ? $record->image_url : '' }}" alt="Preview">
-                    <label class="image-drop" style="flex:1;">
-                        <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/jpg" onchange="previewImage(this)">
+                    <label class="image-drop" id="imageDrop" style="flex:1;">
+                        <input type="file" id="imageInput" name="image" accept="image/png,image/jpeg,image/webp,image/jpg" onchange="previewImage(this)">
                         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--primary); margin-bottom: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <div style="font-size: 13.5px; font-weight: 600; color: var(--text);">Click to upload image</div>
                         <div class="form-hint">PNG, JPG or WEBP — up to 10MB</div>
@@ -123,5 +124,41 @@ function previewImage(input) {
         reader.readAsDataURL(input.files[0]);
     }
 }
+
+// Drag & drop support for the category image uploader
+document.addEventListener('DOMContentLoaded', () => {
+    const drop  = document.getElementById('imageDrop');
+    const input = document.getElementById('imageInput');
+    if (!drop || !input) return;
+
+    ['dragenter', 'dragover'].forEach(ev =>
+        drop.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); drop.classList.add('dragover'); })
+    );
+    ['dragleave', 'dragend'].forEach(ev =>
+        drop.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover'); })
+    );
+
+    drop.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        drop.classList.remove('dragover');
+
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (!files || !files.length) return;
+
+        const file = files[0];
+        if (!file.type.startsWith('image/')) {
+            alert('Please drop an image file (PNG, JPG or WEBP).');
+            return;
+        }
+
+        // Assign the dropped file to the hidden input so it submits with the form.
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+
+        previewImage(input);
+    });
+});
 </script>
 @endsection
