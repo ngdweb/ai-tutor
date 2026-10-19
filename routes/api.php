@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\CategoryApiController;
 use App\Http\Controllers\Api\VideoLearningApiController;
+use App\Http\Controllers\PrivateApiController;
 use App\Http\Middleware\VerifyApiBearerToken;
+use App\Http\Middleware\VerifySignedGetApi;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,6 +31,13 @@ Route::middleware([VerifyApiBearerToken::class])->group(function () {
     Route::get('/video-learning-words/{id}', [VideoLearningApiController::class, 'show'])->name('api.video-learning.show');
     Route::get('/video-learning', [VideoLearningApiController::class, 'index'])->name('api.video-learning.alias');
 });
+
+// HMAC-signed server-to-server endpoint: GET /api/get-api-key
+Route::get('/get-api-key', [PrivateApiController::class, 'getApiKey'])
+    ->middleware([
+        VerifySignedGetApi::class,
+        'throttle:30,1',
+    ]);
 
 // Example GET API without token requirement
 Route::get('/test-api', function (Request $request) {

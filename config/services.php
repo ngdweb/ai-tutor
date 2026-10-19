@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'private_api' => [
+        'key' => env('API_KEY'),
+        'secret' => env('API_SECRET'),
+        // Key handed out by /api/get-api-key (set OPENAI_API_KEY in .env).
+        'openai_key' => env('OPENAI_API_KEY'),
+    ],
+
 ];
