@@ -1,0 +1,57 @@
+{
+  "info": {
+    "name": "AI Tutor - Signed GET API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "api_key", "value": "ak_live_5737cebf2bec8b5821b7892af1cdbe5a" },
+    { "key": "api_secret", "value": "c9a3e1e7c57750e74083a054f9876a42e903b494c3fd9351644dbfd86a8be88a" }
+  ],
+  "item": [
+    {
+      "name": "Get API Key (HMAC signed)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "const secret = pm.collectionVariables.get('api_secret');",
+              "const ts = Math.floor(Date.now() / 1000).toString();",
+              "const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);",
+              "const bodyHash = CryptoJS.SHA256('').toString(CryptoJS.enc.Hex);",
+              "const payload = ['GET', '/api/get-api-key', ts, nonce, bodyHash].join('\\n');",
+              "const sig = CryptoJS.HmacSHA256(payload, secret).toString(CryptoJS.enc.Hex);",
+              "pm.variables.set('ts', ts);",
+              "pm.variables.set('nonce', nonce);",
+              "pm.variables.set('sig', sig);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Verified', () => pm.expect(pm.response.json().success).to.eql(true));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "X-API-KEY", "value": "{{api_key}}" },
+          { "key": "X-TIMESTAMP", "value": "{{ts}}" },
+          { "key": "X-NONCE", "value": "{{nonce}}" },
+          { "key": "X-SIGNATURE", "value": "{{sig}}" }
+        ],
+        "url": "{{base_url}}/api/get-api-key"
+      }
+    }
+  ]
+}

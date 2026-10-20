@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 class VideoLearningWord extends Model
 {
@@ -32,6 +33,59 @@ class VideoLearningWord extends Model
         'episode_no'  => 'integer',
     ];
 
+    protected $appends = [
+        'video_url',
+        'thumbnail_url',
+        'parsed_json',
+        'video_relative_path',
+        'thumbnail_relative_path',
+    ];
+
+    /**
+     * In-memory cache for category slugs to avoid N+1 queries.
+     */
+    protected static ?array $categorySlugCache = null;
+
+    /**
+     * Clear category slug cache.
+     */
+    public static function clearCategorySlugCache(): void
+    {
+        self::$categorySlugCache = null;
+    }
+
+    /**
+     * Resolve the category folder slug for a given category ID.
+     */
+    public static function resolveCategorySlug(?int $categoryId): string
+    {
+        if (!$categoryId) {
+            return 'general';
+        }
+
+        if (self::$categorySlugCache === null) {
+            self::$categorySlugCache = [];
+            try {
+                $categories = Category::all(['id', 'name']);
+                foreach ($categories as $cat) {
+                    $slug = Str::slug($cat->name) ?: 'general';
+                    $base = public_path('uploads/video_learning_with_word');
+                    // Check if folder on disk is named 'tecnology' instead of 'technology'
+                    if (!File::isDirectory($base . '/' . $slug)) {
+                        if ($slug === 'technology' && File::isDirectory($base . '/tecnology')) {
+                            $slug = 'tecnology';
+                        }
+                    }
+                    self::$categorySlugCache[$cat->id] = $slug;
+                }
+            } catch (\Throwable $e) {
+                return 'general';
+            }
+        }
+
+        return self::$categorySlugCache[$categoryId] ?? 'general';
+    }
+
     /**
      * Category this video belongs to.
      */
@@ -40,16 +94,34 @@ class VideoLearningWord extends Model
         return $this->belongsTo(Category::class, 'category_id');
     }
 
-    protected $appends = [
-        'video_url',
-        'thumbnail_url',
-        'parsed_json',
-    ];
+    /**
+     * Mutator to ensure only the filename is stored in video_path.
+     */
+    public function setVideoPathAttribute($value): void
+    {
+        if ($value && !str_starts_with($value, 'http://') && !str_starts_with($value, 'https://')) {
+            $this->attributes['video_path'] = basename(str_replace('\\', '/', $value));
+        } else {
+            $this->attributes['video_path'] = $value;
+        }
+    }
 
     /**
-     * Get full public URL for video
+     * Mutator to ensure only the filename is stored in thumbnail_path.
      */
-    public function getVideoUrlAttribute(): ?string
+    public function setThumbnailPathAttribute($value): void
+    {
+        if ($value && !str_starts_with($value, 'http://') && !str_starts_with($value, 'https://')) {
+            $this->attributes['thumbnail_path'] = basename(str_replace('\\', '/', $value));
+        } else {
+            $this->attributes['thumbnail_path'] = $value;
+        }
+    }
+
+    /**
+     * Get the relative disk path for the video.
+     */
+    public function getVideoRelativePath(): ?string
     {
         if (!$this->video_path) {
             return null;
@@ -59,13 +131,44 @@ class VideoLearningWord extends Model
             return $this->video_path;
         }
 
-        return asset($this->video_path);
+        // If it already contains a slash, it is already a path
+        if (str_contains($this->video_path, '/')) {
+            return $this->video_path;
+        }
+
+        $slug = self::resolveCategorySlug($this->category_id);
+        $categoryPath = 'uploads/video_learning_with_word/' . $slug . '/videos/' . $this->video_path;
+
+        if (File::exists(public_path($categoryPath))) {
+            return $categoryPath;
+        }
+
+        // Check if legacy folder has it
+        $legacyPath = 'uploads/video_learning/videos/' . $this->video_path;
+        if (File::exists(public_path($legacyPath))) {
+            return $legacyPath;
+        }
+
+        // Check if technology variation folder has it
+        if ($slug === 'technology' && File::exists(public_path('uploads/video_learning_with_word/tecnology/videos/' . $this->video_path))) {
+            return 'uploads/video_learning_with_word/tecnology/videos/' . $this->video_path;
+        }
+
+        return $categoryPath;
     }
 
     /**
-     * Get full public URL for thumbnail
+     * Accessor for video_relative_path.
      */
-    public function getThumbnailUrlAttribute(): ?string
+    public function getVideoRelativePathAttribute(): ?string
+    {
+        return $this->getVideoRelativePath();
+    }
+
+    /**
+     * Get the relative disk path for the thumbnail.
+     */
+    public function getThumbnailRelativePath(): ?string
     {
         if (!$this->thumbnail_path) {
             return null;
@@ -75,11 +178,73 @@ class VideoLearningWord extends Model
             return $this->thumbnail_path;
         }
 
-        return asset($this->thumbnail_path);
+        if (str_contains($this->thumbnail_path, '/')) {
+            return $this->thumbnail_path;
+        }
+
+        $slug = self::resolveCategorySlug($this->category_id);
+        $categoryPath = 'uploads/video_learning_with_word/' . $slug . '/thumbnails/' . $this->thumbnail_path;
+
+        if (File::exists(public_path($categoryPath))) {
+            return $categoryPath;
+        }
+
+        $legacyPath = 'uploads/video_learning/thumbnails/' . $this->thumbnail_path;
+        if (File::exists(public_path($legacyPath))) {
+            return $legacyPath;
+        }
+
+        if ($slug === 'technology' && File::exists(public_path('uploads/video_learning_with_word/tecnology/thumbnails/' . $this->thumbnail_path))) {
+            return 'uploads/video_learning_with_word/tecnology/thumbnails/' . $this->thumbnail_path;
+        }
+
+        return $categoryPath;
     }
 
     /**
-     * Get parsed JSON or array representation
+     * Accessor for thumbnail_relative_path.
+     */
+    public function getThumbnailRelativePathAttribute(): ?string
+    {
+        return $this->getThumbnailRelativePath();
+    }
+
+    /**
+     * Get full public URL for video.
+     */
+    public function getVideoUrlAttribute(): ?string
+    {
+        $rel = $this->getVideoRelativePath();
+        if (!$rel) {
+            return null;
+        }
+
+        if (str_starts_with($rel, 'http://') || str_starts_with($rel, 'https://')) {
+            return $rel;
+        }
+
+        return asset($rel);
+    }
+
+    /**
+     * Get full public URL for thumbnail.
+     */
+    public function getThumbnailUrlAttribute(): ?string
+    {
+        $rel = $this->getThumbnailRelativePath();
+        if (!$rel) {
+            return null;
+        }
+
+        if (str_starts_with($rel, 'http://') || str_starts_with($rel, 'https://')) {
+            return $rel;
+        }
+
+        return asset($rel);
+    }
+
+    /**
+     * Get parsed JSON or array representation.
      */
     public function getParsedJsonAttribute()
     {
@@ -98,14 +263,16 @@ class VideoLearningWord extends Model
     {
         $touchedDirs = [];
 
-        if ($this->video_path && !str_starts_with($this->video_path, 'http') && File::exists(public_path($this->video_path))) {
-            File::delete(public_path($this->video_path));
-            $touchedDirs[] = dirname(public_path($this->video_path));
+        $vRel = $this->getVideoRelativePath();
+        if ($vRel && !str_starts_with($vRel, 'http') && File::exists(public_path($vRel))) {
+            File::delete(public_path($vRel));
+            $touchedDirs[] = dirname(public_path($vRel));
         }
 
-        if ($this->thumbnail_path && !str_starts_with($this->thumbnail_path, 'http') && File::exists(public_path($this->thumbnail_path))) {
-            File::delete(public_path($this->thumbnail_path));
-            $touchedDirs[] = dirname(public_path($this->thumbnail_path));
+        $tRel = $this->getThumbnailRelativePath();
+        if ($tRel && !str_starts_with($tRel, 'http') && File::exists(public_path($tRel))) {
+            File::delete(public_path($tRel));
+            $touchedDirs[] = dirname(public_path($tRel));
         }
 
         self::cleanupEmptyFolders($touchedDirs);
@@ -150,7 +317,7 @@ class VideoLearningWord extends Model
     }
 
     /**
-     * Booted model events for auto file cleanup on delete
+     * Booted model events for auto file cleanup on delete.
      */
     protected static function booted()
     {

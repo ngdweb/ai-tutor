@@ -186,21 +186,19 @@ class VideoLearningWordController extends Controller
 
                 $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
                 $videoFile->move(public_path($videoRelDir), $videoFileName);
-                $videoRelativePath = $videoRelDir . '/' . $videoFileName;
 
                 // Handle Thumbnail
-                $thumbnailRelativePath = null;
+                $thumbnailFileName = null;
                 if ($thumbFile) {
-                    $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
                     $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
                     $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
-                    $thumbnailRelativePath = $thumbRelDir . '/' . $thumbFileName;
+                    $thumbnailFileName = $thumbFileName;
                 } elseif (!empty($autoThumbBase64)) {
-                    $thumbnailRelativePath = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
+                    $thumbnailFileName = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
                 }
 
-                if (!$thumbnailRelativePath) {
-                    $thumbnailRelativePath = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video', $thumbRelDir);
+                if (!$thumbnailFileName) {
+                    $thumbnailFileName = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video', $thumbRelDir);
                 }
 
                 $title = $titleInput ?: ($videoCleanName ? ucwords(str_replace('-', ' ', $videoCleanName)) : 'Untitled Video');
@@ -209,9 +207,9 @@ class VideoLearningWordController extends Controller
                     'category_id'    => $categoryId,
                     'title'          => $title,
                     'episode_no'     => $episodeNo,
-                    'video_path'     => $videoRelativePath,
+                    'video_path'     => $videoFileName,
                     'video_name'     => $originalVideoName,
-                    'thumbnail_path' => $thumbnailRelativePath,
+                    'thumbnail_path' => $thumbnailFileName,
                     'json_data'      => $this->formatJson($jsonData),
                     'is_visible'     => $isVisible,
                 ]);
@@ -247,21 +245,19 @@ class VideoLearningWordController extends Controller
         
         $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
         $videoFile->move(public_path($videoRelDir), $videoFileName);
-        $videoRelativePath = $videoRelDir . '/' . $videoFileName;
 
-        $thumbnailRelativePath = null;
+        $thumbnailFileName = null;
         if ($request->hasFile('thumbnail')) {
             $thumbFile = $request->file('thumbnail');
-            $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
             $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
             $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
-            $thumbnailRelativePath = $thumbRelDir . '/' . $thumbFileName;
+            $thumbnailFileName = $thumbFileName;
         } elseif ($request->filled('auto_thumbnail_base64')) {
-            $thumbnailRelativePath = $this->saveBase64Image($request->input('auto_thumbnail_base64'), $thumbRelDir);
+            $thumbnailFileName = $this->saveBase64Image($request->input('auto_thumbnail_base64'), $thumbRelDir);
         }
 
-        if (!$thumbnailRelativePath) {
-            $thumbnailRelativePath = $this->generateDefaultThumbnail($request->input('title') ?: $videoCleanName ?: 'Video', $thumbRelDir);
+        if (!$thumbnailFileName) {
+            $thumbnailFileName = $this->generateDefaultThumbnail($request->input('title') ?: $videoCleanName ?: 'Video', $thumbRelDir);
         }
 
         $title = $request->input('title') ?: ($videoCleanName ? ucwords(str_replace('-', ' ', $videoCleanName)) : 'Untitled Video');
@@ -271,9 +267,9 @@ class VideoLearningWordController extends Controller
             'category_id'    => $categoryId,
             'title'          => $title,
             'episode_no'     => $this->normalizeEpisodeNo($request->input('episode_no')),
-            'video_path'     => $videoRelativePath,
+            'video_path'     => $videoFileName,
             'video_name'     => $originalVideoName,
-            'thumbnail_path' => $thumbnailRelativePath,
+            'thumbnail_path' => $thumbnailFileName,
             'json_data'      => $this->formatJson($request->input('json_data')),
             'is_visible'     => $isVisible,
         ]);
@@ -352,23 +348,22 @@ class VideoLearningWordController extends Controller
                             $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
                             $videoFile->move(public_path($videoRelDir), $videoFileName);
 
-                            $this->deleteFileAndCleanup($item->video_path);
+                            $this->deleteFileAndCleanup($item->getVideoRelativePath());
 
-                            $item->video_path = $videoRelDir . '/' . $videoFileName;
+                            $item->video_path = $videoFileName;
                             $item->video_name = $originalVideoName;
                         }
 
                         if ($thumbFile) {
-                            $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
                             $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
                             $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
 
-                            $this->deleteFileAndCleanup($item->thumbnail_path);
+                            $this->deleteFileAndCleanup($item->getThumbnailRelativePath());
 
-                            $item->thumbnail_path = $thumbRelDir . '/' . $thumbFileName;
+                            $item->thumbnail_path = $thumbFileName;
                         } elseif (!empty($autoThumbBase64)) {
                             $newThumb = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
-                            $this->deleteFileAndCleanup($item->thumbnail_path);
+                            $this->deleteFileAndCleanup($item->getThumbnailRelativePath());
                             $item->thumbnail_path = $newThumb;
                         }
 
@@ -376,10 +371,16 @@ class VideoLearningWordController extends Controller
                             $item->title = $titleInput;
                         }
                         $item->episode_no = $episodeNo;
-                        $item->category_id = $categoryId;
-                        // Keep files in the correct category folder when the category was changed.
-                        $item->video_path = $this->relocateToCategory($item->video_path, $videoRelDir);
-                        $item->thumbnail_path = $this->relocateToCategory($item->thumbnail_path, $thumbRelDir);
+                        $oldCatId = $item->category_id;
+                        if ($oldCatId !== $categoryId) {
+                            $oldVideoRel = $item->getVideoRelativePath();
+                            $oldThumbRel = $item->getThumbnailRelativePath();
+                            $item->category_id = $categoryId;
+                            $item->video_path = $this->relocateToCategory($oldVideoRel, $videoRelDir);
+                            $item->thumbnail_path = $this->relocateToCategory($oldThumbRel, $thumbRelDir);
+                        } else {
+                            $item->category_id = $categoryId;
+                        }
                         $item->json_data = $this->formatJson($jsonData);
                         $item->is_visible = $isVisible;
                         $item->updated_at = now();
@@ -395,29 +396,27 @@ class VideoLearningWordController extends Controller
 
                         $videoFileName = $this->uniqueUploadName($videoFile, $videoRelDir, 'mp4');
                         $videoFile->move(public_path($videoRelDir), $videoFileName);
-                        $videoRelativePath = $videoRelDir . '/' . $videoFileName;
 
-                        $thumbnailRelativePath = null;
+                        $thumbnailFileName = null;
                         if ($thumbFile) {
-                            $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
                             $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
                             $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
-                            $thumbnailRelativePath = $thumbRelDir . '/' . $thumbFileName;
+                            $thumbnailFileName = $thumbFileName;
                         } elseif (!empty($autoThumbBase64)) {
-                            $thumbnailRelativePath = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
+                            $thumbnailFileName = $this->saveBase64Image($autoThumbBase64, $thumbRelDir);
                         }
 
-                        if (!$thumbnailRelativePath) {
-                            $thumbnailRelativePath = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video', $thumbRelDir);
+                        if (!$thumbnailFileName) {
+                            $thumbnailFileName = $this->generateDefaultThumbnail($titleInput ?: $videoCleanName ?: 'Video', $thumbRelDir);
                         }
 
                         VideoLearningWord::create([
                             'category_id'    => $categoryId,
                             'title'          => $titleInput ?: ($videoCleanName ? ucwords(str_replace('-', ' ', $videoCleanName)) : 'Untitled Video'),
                             'episode_no'     => $episodeNo,
-                            'video_path'     => $videoRelativePath,
+                            'video_path'     => $videoFileName,
                             'video_name'     => $originalVideoName,
-                            'thumbnail_path' => $thumbnailRelativePath,
+                            'thumbnail_path' => $thumbnailFileName,
                             'json_data'      => $this->formatJson($jsonData),
                             'is_visible'     => $isVisible,
                         ]);
@@ -459,24 +458,23 @@ class VideoLearningWordController extends Controller
             $videoFile->move(public_path($videoRelDir), $videoFileName);
 
             // Remove the previous file only after the new one is safely stored.
-            $this->deleteFileAndCleanup($item->video_path);
+            $this->deleteFileAndCleanup($item->getVideoRelativePath());
 
-            $item->video_path = $videoRelDir . '/' . $videoFileName;
+            $item->video_path = $videoFileName;
             $item->video_name = $originalVideoName;
         }
 
         if ($request->hasFile('thumbnail')) {
             $thumbFile = $request->file('thumbnail');
-            $thumbExt = $thumbFile->getClientOriginalExtension() ?: 'jpg';
             $thumbFileName = $this->uniqueUploadName($thumbFile, $thumbRelDir, 'jpg');
             $thumbFile->move(public_path($thumbRelDir), $thumbFileName);
 
-            $this->deleteFileAndCleanup($item->thumbnail_path);
+            $this->deleteFileAndCleanup($item->getThumbnailRelativePath());
 
-            $item->thumbnail_path = $thumbRelDir . '/' . $thumbFileName;
+            $item->thumbnail_path = $thumbFileName;
         } elseif ($request->filled('auto_thumbnail_base64')) {
             $newThumb = $this->saveBase64Image($request->input('auto_thumbnail_base64'), $thumbRelDir);
-            $this->deleteFileAndCleanup($item->thumbnail_path);
+            $this->deleteFileAndCleanup($item->getThumbnailRelativePath());
             $item->thumbnail_path = $newThumb;
         }
 
@@ -485,10 +483,16 @@ class VideoLearningWordController extends Controller
         }
 
         $item->episode_no = $this->normalizeEpisodeNo($request->input('episode_no'));
-        $item->category_id = $categoryId;
-        // Keep files in the correct category folder when the category was changed.
-        $item->video_path = $this->relocateToCategory($item->video_path, $videoRelDir);
-        $item->thumbnail_path = $this->relocateToCategory($item->thumbnail_path, $thumbRelDir);
+        $oldCatId = $item->category_id;
+        if ($oldCatId !== $categoryId) {
+            $oldVideoRel = $item->getVideoRelativePath();
+            $oldThumbRel = $item->getThumbnailRelativePath();
+            $item->category_id = $categoryId;
+            $item->video_path = $this->relocateToCategory($oldVideoRel, $videoRelDir);
+            $item->thumbnail_path = $this->relocateToCategory($oldThumbRel, $thumbRelDir);
+        } else {
+            $item->category_id = $categoryId;
+        }
         $item->json_data = $this->formatJson($request->input('json_data'));
         $item->is_visible = $request->has('is_visible') ? (bool)$request->input('is_visible') : $item->is_visible;
         $item->updated_at = now();
@@ -613,7 +617,7 @@ class VideoLearningWordController extends Controller
 
             File::put($destination, $decoded);
 
-            return $thumbRelDir . '/' . $thumbFileName;
+            return $thumbFileName;
         } catch (\Throwable $e) {
             return null;
         }
@@ -669,7 +673,7 @@ class VideoLearningWordController extends Controller
         imagejpeg($img, $destination, 90);
         imagedestroy($img);
 
-        return $thumbRelDir . '/' . $thumbFileName;
+        return $thumbFileName;
     }
 
     /**
@@ -772,17 +776,17 @@ class VideoLearningWordController extends Controller
     private function relocateToCategory(?string $relPath, string $targetRelDir): ?string
     {
         if (!$relPath || str_starts_with($relPath, 'http')) {
-            return $relPath;
+            return $relPath ? basename($relPath) : null;
         }
 
         $currentDir = trim(str_replace('\\', '/', dirname($relPath)), '/');
         if ($currentDir === trim($targetRelDir, '/')) {
-            return $relPath; // already in the correct category folder
+            return basename($relPath); // already in the correct category folder
         }
 
         $src = public_path($relPath);
         if (!File::exists($src)) {
-            return $relPath; // nothing physical to move
+            return basename($relPath); // nothing physical to move
         }
 
         $this->ensureDir($targetRelDir);
@@ -791,7 +795,7 @@ class VideoLearningWordController extends Controller
 
         VideoLearningWord::cleanupEmptyFolders([dirname($src)]);
 
-        return $targetRelDir . '/' . $fileName;
+        return $fileName;
     }
 
     /**

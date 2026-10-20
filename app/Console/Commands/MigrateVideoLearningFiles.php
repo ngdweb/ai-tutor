@@ -39,19 +39,23 @@ class MigrateVideoLearningFiles extends Command
                 $changed = false;
 
                 // Video
-                $newVideo = $this->relocate($item->video_path, $base . '/videos', $move);
-                if ($newVideo && $newVideo !== $item->video_path) {
-                    $item->video_path = $newVideo;
+                $currentVideo = $item->getVideoRelativePath();
+                $newVideo = $this->relocate($currentVideo, $base . '/videos', $move);
+                $newVideoName = $newVideo ? basename($newVideo) : null;
+                if ($newVideoName && $newVideoName !== $item->video_path) {
+                    $item->video_path = $newVideoName;
                     $videoCount++;
                     $changed = true;
-                } elseif ($newVideo === $item->video_path) {
+                } elseif ($newVideoName === $item->video_path) {
                     $skipped++;
                 }
 
                 // Thumbnail
-                $newThumb = $this->relocate($item->thumbnail_path, $base . '/thumbnails', $move);
-                if ($newThumb && $newThumb !== $item->thumbnail_path) {
-                    $item->thumbnail_path = $newThumb;
+                $currentThumb = $item->getThumbnailRelativePath();
+                $newThumb = $this->relocate($currentThumb, $base . '/thumbnails', $move);
+                $newThumbName = $newThumb ? basename($newThumb) : null;
+                if ($newThumbName && $newThumbName !== $item->thumbnail_path) {
+                    $item->thumbnail_path = $newThumbName;
                     $thumbCount++;
                     $changed = true;
                 }
@@ -65,9 +69,11 @@ class MigrateVideoLearningFiles extends Command
         // Category images
         foreach (Category::all() as $category) {
             $slug = Str::slug($category->name) ?: 'general';
-            $newImage = $this->relocate($category->image_path, 'uploads/video_learning_with_word/' . $slug . '/category', $move);
-            if ($newImage && $newImage !== $category->image_path) {
-                $category->image_path = $newImage;
+            $currentImage = $category->getImageRelativePath();
+            $newImage = $this->relocate($currentImage, 'uploads/video_learning_with_word/' . $slug . '/category', $move);
+            $newImageName = $newImage ? basename($newImage) : null;
+            if ($newImageName && $newImageName !== $category->image_path) {
+                $category->image_path = $newImageName;
                 $category->saveQuietly();
                 $imageCount++;
             }

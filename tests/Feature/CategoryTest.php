@@ -240,13 +240,13 @@ class CategoryTest extends TestCase
 
         $cat = Category::where('name', 'Animals')->first();
 
-        // Stored under uploads/video_learning_with_word/<category>/category, keeping the original name.
-        $this->assertEquals('uploads/video_learning_with_word/animals/category/animal-cover.png', $cat->image_path);
-        $this->assertTrue(File::exists(public_path($cat->image_path)));
-        $this->assertStringContainsString('uploads/video_learning_with_word/animals/category/', $cat->image_url);
+        // Stored only the filename in image_path, file exists in uploads/video_learning_with_word/<category>/category
+        $this->assertEquals('animal-cover.png', $cat->image_path);
+        $this->assertTrue(File::exists(public_path($cat->image_relative_path)));
+        $this->assertStringContainsString('uploads/video_learning_with_word/animals/category/animal-cover.png', $cat->image_url);
 
         // Cleanup
-        $path = $cat->image_path;
+        $path = $cat->image_relative_path;
         $cat->delete();
         $this->assertFalse(File::exists(public_path($path)));
     }
@@ -269,10 +269,12 @@ class CategoryTest extends TestCase
 
         $item = VideoLearningWord::where('category_id', $cat->id)->first();
         $this->assertNotNull($item);
-        $this->assertStringStartsWith('uploads/video_learning_with_word/my-animals/videos/', $item->video_path);
-        $this->assertStringStartsWith('uploads/video_learning_with_word/my-animals/thumbnails/', $item->thumbnail_path);
-        $this->assertTrue(File::exists(public_path($item->video_path)));
-        $this->assertTrue(File::exists(public_path($item->thumbnail_path)));
+        $this->assertEquals('lesson.mp4', $item->video_path);
+        $this->assertEquals('cover.jpg', $item->thumbnail_path);
+        $this->assertTrue(File::exists(public_path($item->video_relative_path)));
+        $this->assertTrue(File::exists(public_path($item->thumbnail_relative_path)));
+        $this->assertStringContainsString('uploads/video_learning_with_word/my-animals/videos/lesson.mp4', $item->video_url);
+        $this->assertStringContainsString('uploads/video_learning_with_word/my-animals/thumbnails/cover.jpg', $item->thumbnail_url);
 
         // Cleanup (model hook removes files)
         $item->delete();
@@ -294,8 +296,8 @@ class CategoryTest extends TestCase
         // First upload keeps the original name.
         $this->actingAs($this->user)->post(route('video-learning.store'), $payload());
         $first = VideoLearningWord::where('category_id', $cat->id)->latest('id')->first();
-        $this->assertEquals('uploads/video_learning_with_word/dup-cat/videos/lesson.mp4', $first->video_path);
-        $this->assertEquals('uploads/video_learning_with_word/dup-cat/thumbnails/cover.jpg', $first->thumbnail_path);
+        $this->assertEquals('lesson.mp4', $first->video_path);
+        $this->assertEquals('cover.jpg', $first->thumbnail_path);
 
         // Second upload with the SAME names in the SAME category gets a timestamp suffix.
         $this->actingAs($this->user)->post(route('video-learning.store'), $payload());
@@ -303,12 +305,12 @@ class CategoryTest extends TestCase
 
         $this->assertNotEquals($first->video_path, $second->video_path);
         $this->assertNotEquals($first->thumbnail_path, $second->thumbnail_path);
-        $this->assertMatchesRegularExpression('#/videos/lesson_\d+\.mp4$#', $second->video_path);
-        $this->assertMatchesRegularExpression('#/thumbnails/cover_\d+\.jpg$#', $second->thumbnail_path);
+        $this->assertMatchesRegularExpression('#^lesson_\d+\.mp4$#', $second->video_path);
+        $this->assertMatchesRegularExpression('#^cover_\d+\.jpg$#', $second->thumbnail_path);
 
         // Both files actually exist on disk.
-        $this->assertTrue(File::exists(public_path($first->video_path)));
-        $this->assertTrue(File::exists(public_path($second->video_path)));
+        $this->assertTrue(File::exists(public_path($first->video_relative_path)));
+        $this->assertTrue(File::exists(public_path($second->video_relative_path)));
 
         VideoLearningWord::where('category_id', $cat->id)->get()->each->delete();
     }
@@ -363,6 +365,9 @@ class CategoryTest extends TestCase
 
     public function test_editing_category_relocates_files_to_new_folder()
     {
+        File::deleteDirectory(public_path('uploads/video_learning_with_word/cat-a'));
+        File::deleteDirectory(public_path('uploads/video_learning_with_word/cat-b'));
+
         $catA = Category::create(['name' => 'Cat A', 'is_active' => true, 'order_index' => 1]);
         $catB = Category::create(['name' => 'Cat B', 'is_active' => true, 'order_index' => 2]);
 
@@ -375,7 +380,8 @@ class CategoryTest extends TestCase
             'is_visible'  => '1',
         ]);
         $item = VideoLearningWord::where('category_id', $catA->id)->first();
-        $this->assertStringContainsString('/cat-a/videos/', $item->video_path);
+        $this->assertMatchesRegularExpression('#^clip(_\d+)?\.mp4$#', $item->video_path);
+        $this->assertStringContainsString('/cat-a/videos/', $item->video_url);
 
         // Edit: move it to Cat B (no new files uploaded, just category change).
         $this->actingAs($this->user)->post(route('video-learning.update', $item->id), [
@@ -386,10 +392,11 @@ class CategoryTest extends TestCase
 
         $item->refresh();
         $this->assertEquals($catB->id, $item->category_id);
-        $this->assertStringContainsString('/cat-b/videos/', $item->video_path);
-        $this->assertStringContainsString('/cat-b/thumbnails/', $item->thumbnail_path);
-        $this->assertTrue(File::exists(public_path($item->video_path)));
-        $this->assertTrue(File::exists(public_path($item->thumbnail_path)));
+        $this->assertMatchesRegularExpression('#^clip(_\d+)?\.mp4$#', $item->video_path);
+        $this->assertStringContainsString('/cat-b/videos/', $item->video_url);
+        $this->assertStringContainsString('/cat-b/thumbnails/', $item->thumbnail_url);
+        $this->assertTrue(File::exists(public_path($item->video_relative_path)));
+        $this->assertTrue(File::exists(public_path($item->thumbnail_relative_path)));
         // Old Cat A folders are gone (were emptied by the move).
         $this->assertFalse(File::isDirectory(public_path('uploads/video_learning_with_word/cat-a/videos')));
 

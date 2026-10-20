@@ -134,10 +134,10 @@ class VideoLearningWordTest extends TestCase
 
         $item = VideoLearningWord::first();
         $this->assertNotNull($item);
-        $this->assertStringContainsString('/videos/', $item->video_path);
-        $this->assertStringContainsString('/thumbnails/', $item->thumbnail_path);
-        $this->assertTrue(File::exists(public_path($item->video_path)));
-        $this->assertTrue(File::exists(public_path($item->thumbnail_path)));
+        $this->assertStringNotContainsString('/', $item->video_path);
+        $this->assertStringNotContainsString('/', $item->thumbnail_path);
+        $this->assertTrue(File::exists(public_path($item->video_relative_path)));
+        $this->assertTrue(File::exists(public_path($item->thumbnail_relative_path)));
 
         // Clean up created file
         $item->delete();
@@ -163,7 +163,7 @@ class VideoLearningWordTest extends TestCase
         $this->assertNotNull($item);
         $this->assertNotNull($item->thumbnail_path);
         $this->assertStringContainsString('thumb_', $item->thumbnail_path);
-        $this->assertTrue(File::exists(public_path($item->thumbnail_path)));
+        $this->assertTrue(File::exists(public_path($item->thumbnail_relative_path)));
 
         // Clean up
         $item->delete();
@@ -188,9 +188,11 @@ class VideoLearningWordTest extends TestCase
         $item = VideoLearningWord::first();
         $oldVideoPath = $item->video_path;
         $oldThumbPath = $item->thumbnail_path;
+        $oldVideoRel = $item->video_relative_path;
+        $oldThumbRel = $item->thumbnail_relative_path;
 
-        $this->assertTrue(File::exists(public_path($oldVideoPath)));
-        $this->assertTrue(File::exists(public_path($oldThumbPath)));
+        $this->assertTrue(File::exists(public_path($oldVideoRel)));
+        $this->assertTrue(File::exists(public_path($oldThumbRel)));
 
         // Sleep 1 second so time() timestamp increments
         sleep(1);
@@ -218,12 +220,12 @@ class VideoLearningWordTest extends TestCase
         $this->assertNotEquals($oldThumbPath, $item->thumbnail_path);
 
         // Old files MUST be deleted from disk
-        $this->assertFalse(File::exists(public_path($oldVideoPath)));
-        $this->assertFalse(File::exists(public_path($oldThumbPath)));
+        $this->assertFalse(File::exists(public_path($oldVideoRel)));
+        $this->assertFalse(File::exists(public_path($oldThumbRel)));
 
         // New files MUST exist on disk
-        $this->assertTrue(File::exists(public_path($item->video_path)));
-        $this->assertTrue(File::exists(public_path($item->thumbnail_path)));
+        $this->assertTrue(File::exists(public_path($item->video_relative_path)));
+        $this->assertTrue(File::exists(public_path($item->thumbnail_relative_path)));
 
         $item->delete();
     }
@@ -245,18 +247,18 @@ class VideoLearningWordTest extends TestCase
         ]);
 
         $item = VideoLearningWord::first();
-        $videoPath = $item->video_path;
-        $thumbPath = $item->thumbnail_path;
+        $videoRel = $item->video_relative_path;
+        $thumbRel = $item->thumbnail_relative_path;
 
-        $this->assertTrue(File::exists(public_path($videoPath)));
-        $this->assertTrue(File::exists(public_path($thumbPath)));
+        $this->assertTrue(File::exists(public_path($videoRel)));
+        $this->assertTrue(File::exists(public_path($thumbRel)));
 
         $response = $this->actingAs($this->user)->delete(route('video-learning.destroy', $item->id));
         $response->assertRedirect(route('video-learning.index'));
 
         $this->assertDatabaseMissing('video_learning_words', ['id' => $item->id]);
-        $this->assertFalse(File::exists(public_path($videoPath)));
-        $this->assertFalse(File::exists(public_path($thumbPath)));
+        $this->assertFalse(File::exists(public_path($videoRel)));
+        $this->assertFalse(File::exists(public_path($thumbRel)));
     }
 
     /**

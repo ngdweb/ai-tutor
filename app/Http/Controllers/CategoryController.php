@@ -116,13 +116,28 @@ class CategoryController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            if ($category->image_path && File::exists(public_path($category->image_path))) {
-                File::delete(public_path($category->image_path));
+            $oldRel = $category->getImageRelativePath();
+            if ($oldRel && File::exists(public_path($oldRel))) {
+                File::delete(public_path($oldRel));
             }
             $category->image_path = $this->storeImage($request->file('image'), $request->input('name'));
         }
 
-        $category->name = $request->input('name');
+        $oldName = $category->name;
+        $newName = $request->input('name');
+        if ($oldName !== $newName) {
+            $oldSlug = Str::slug($oldName) ?: 'general';
+            $newSlug = Str::slug($newName) ?: 'general';
+            if ($oldSlug !== $newSlug) {
+                $oldDir = public_path('uploads/video_learning_with_word/' . $oldSlug);
+                $newDir = public_path('uploads/video_learning_with_word/' . $newSlug);
+                if (File::isDirectory($oldDir) && !File::isDirectory($newDir)) {
+                    File::moveDirectory($oldDir, $newDir);
+                }
+            }
+        }
+
+        $category->name = $newName;
         $category->is_active = $request->has('is_active') ? (bool) $request->input('is_active') : $category->is_active;
         $category->save();
 
@@ -232,6 +247,6 @@ class CategoryController extends Controller
 
         $file->move($dir, $fileName);
 
-        return $relativeDir . '/' . $fileName;
+        return $fileName;
     }
 }
