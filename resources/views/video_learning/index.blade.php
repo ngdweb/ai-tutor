@@ -772,7 +772,7 @@
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                                 {{ Str::limit($item->video_name ?: basename($item->video_path), 40) }}
                             </span>
-                            <button class="btn-play-trigger" onclick="openVideoPlayer('{{ $item->video_url }}', '{{ addslashes($item->video_name ?: basename($item->video_path)) }}')">
+                            <button class="btn-play-trigger video-btn" data-stream-url="{{ route('video-learning.stream', $item->id) }}" data-title="{{ addslashes($item->video_name ?: basename($item->video_path)) }}" onclick="openVideoPlayer(this.dataset.streamUrl, this.dataset.title)">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                 Play Video
                             </button>
@@ -879,7 +879,7 @@
             </button>
         </div>
         <div style="padding: 0; background: #000; display: flex; align-items: center; justify-content: center; min-height: 480px;">
-            <video id="mainVideoPlayer" controls playsinline style="width: 100%; max-height: 75vh; aspect-ratio: 9/16; object-fit: contain;"></video>
+            <video id="mainVideoPlayer" controls playsinline controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback oncontextmenu="return false" style="width: 100%; max-height: 75vh; aspect-ratio: 9/16; object-fit: contain;"></video>
         </div>
     </div>
 </div>
@@ -914,7 +914,7 @@
 <div class="modal-backdrop" id="imageModal" onclick="closeModal('imageModal')">
     <div class="modal-card" style="max-width: 440px; background: transparent; border: none; box-shadow: none;" onclick="event.stopPropagation()">
         <div style="position: relative; text-align: center;">
-            <img id="lightboxImg" src="" alt="Enlarged Thumbnail" style="max-width: 100%; max-height: 80vh; aspect-ratio: 9/16; object-fit: contain; border-radius: 16px; box-shadow: 0 25px 50px rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.15);">
+            <img id="lightboxImg" data-no-canvas="1" draggable="false" oncontextmenu="return false" src="" alt="Enlarged Thumbnail" style="max-width: 100%; max-height: 80vh; aspect-ratio: 9/16; object-fit: contain; border-radius: 16px; box-shadow: 0 25px 50px rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.15);">
         </div>
     </div>
 </div>
@@ -1098,17 +1098,37 @@ function closeModal(id) {
 }
 
 // Video Player Modal
-function openVideoPlayer(url, title) {
+// Secure video playback: the button carries only an id-based POST stream URL.
+// We POST it (auth + CSRF), read the bytes as a blob, and play that blob — so no
+// real file URL ever appears in the page.
+let currentVideoBlobUrl = null;
+
+function openVideoPlayer(streamUrl, title) {
     const video = document.getElementById('mainVideoPlayer');
     document.getElementById('videoModalTitle').textContent = title || 'Video Player';
-    video.src = url;
     openModal('videoModal');
-    video.play().catch(() => {});
+    video.removeAttribute('src');
+
+    fetch(streamUrl, {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin'
+    })
+    .then(res => { if (!res.ok) throw new Error('stream failed'); return res.blob(); })
+    .then(blob => {
+        if (currentVideoBlobUrl) { URL.revokeObjectURL(currentVideoBlobUrl); }
+        currentVideoBlobUrl = URL.createObjectURL(blob);
+        video.src = currentVideoBlobUrl;
+        video.play().catch(() => {});
+    })
+    .catch(() => { showToast('Unable to load video.', 'error'); closeModal('videoModal'); });
 }
 function closeVideoPlayer() {
     const video = document.getElementById('mainVideoPlayer');
     video.pause();
-    video.src = '';
+    video.removeAttribute('src');
+    video.load();
+    if (currentVideoBlobUrl) { URL.revokeObjectURL(currentVideoBlobUrl); currentVideoBlobUrl = null; }
     closeModal('videoModal');
 }
 

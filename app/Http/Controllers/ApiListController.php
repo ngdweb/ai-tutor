@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\VideoLearningWord;
+use App\Models\LearnupCategory;
+use App\Models\LearnupWord;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -166,6 +168,160 @@ class ApiListController extends Controller
             ]
         ];
 
-        return view('api_list.index', compact('endpoints', 'visibleCount'));
+        $pageTitle = 'Video Learning API';
+
+        return view('api_list.index', compact('endpoints', 'visibleCount', 'pageTitle'));
+    }
+
+    /**
+     * LearnUp with AI API Documentation & List screen.
+     */
+    public function learnup(Request $request): View
+    {
+        $visibleCount   = LearnupWord::where('is_visible', true)->count();
+        $sampleRecord   = LearnupWord::where('is_visible', true)->first();
+        $sampleCategory = LearnupCategory::where('is_active', true)->first();
+
+        $endpoints = [
+            [
+                'name'        => 'Get All LearnUp Categories',
+                'method'      => 'GET',
+                'endpoint'    => '/api/learnup-categories',
+                'full_url'    => url('/api/learnup-categories'),
+                'description' => 'Fetches all active LearnUp categories. Each includes a preview of its latest 5 visible items plus a total_videos count.',
+                'params'      => [],
+                'headers'     => [
+                    'Authorization' => 'Bearer <YOUR_API_TOKEN>',
+                    'Accept'        => 'application/json',
+                ],
+                'sample_response' => [
+                    'status'  => true,
+                    'message' => 'Categories fetched successfully.',
+                    'total'   => LearnupCategory::where('is_active', true)->count(),
+                    'data'    => [
+                        [
+                            'id'           => $sampleCategory?->id ?? 1,
+                            'name'         => $sampleCategory?->name ?? 'General',
+                            'image_url'    => $sampleCategory?->image_url,
+                            'total_videos' => $sampleCategory ? $sampleCategory->videos()->where('is_visible', true)->count() : 0,
+                            'videos'       => [
+                                [
+                                    'id'            => $sampleRecord?->id ?? 1,
+                                    'category_id'   => $sampleRecord?->category_id ?? 1,
+                                    'video_url'     => $sampleRecord?->video_url ?? url('uploads/learnup_with_ai/general/videos/sample.mp4'),
+                                    'thumbnail_url' => $sampleRecord?->thumbnail_url ?? url('uploads/learnup_with_ai/general/thumbnails/sample.jpg'),
+                                    'json_data'     => $sampleRecord?->parsed_json ?? ['word' => 'Apple'],
+                                    'created_at'    => $sampleRecord?->created_at?->toIso8601String() ?? now()->toIso8601String(),
+                                    'updated_at'    => $sampleRecord?->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                                ]
+                            ],
+                        ]
+                    ]
+                ]
+            ],
+            [
+                'name'        => 'Get LearnUp Category Videos (POST, category_id in body)',
+                'method'      => 'POST',
+                'endpoint'    => '/api/learnup-categories/videos',
+                'full_url'    => url('/api/learnup-categories/videos'),
+                'description' => 'Fetches ALL visible items of a single LearnUp category. Send category_id in the body. Pass category_id = 0 to return every visible item across all categories.',
+                'params'      => [
+                    [
+                        'name'        => 'category_id',
+                        'type'        => 'integer (body)',
+                        'required'    => true,
+                        'description' => 'Category ID in the JSON body. Use 0 to fetch all items from every category.'
+                    ]
+                ],
+                'headers'     => [
+                    'Authorization' => 'Bearer <YOUR_API_TOKEN>',
+                    'Accept'        => 'application/json',
+                    'Content-Type'  => 'application/json',
+                ],
+                'sample_body' => [
+                    'category_id' => $sampleCategory?->id ?? 1,
+                ],
+                'sample_response' => [
+                    'status'   => true,
+                    'message'  => 'Category videos fetched successfully.',
+                    'category' => [
+                        'id'        => $sampleCategory?->id ?? 1,
+                        'name'      => $sampleCategory?->name ?? 'General',
+                        'image_url' => $sampleCategory?->image_url,
+                    ],
+                    'total'    => $sampleCategory ? $sampleCategory->videos()->where('is_visible', true)->count() : 0,
+                    'data'     => [],
+                ]
+            ],
+            [
+                'name'        => 'Get All LearnUp Items',
+                'method'      => 'GET',
+                'endpoint'    => '/api/learnup-words',
+                'full_url'    => url('/api/learnup-words'),
+                'description' => 'Fetches all active (visible) LearnUp items in saved sequence order. Excludes hidden records.',
+                'params'      => [
+                    [
+                        'name'        => 'search',
+                        'type'        => 'string',
+                        'required'    => false,
+                        'description' => 'Optional filter by name or JSON content.'
+                    ]
+                ],
+                'headers'     => [
+                    'Authorization' => 'Bearer <YOUR_API_TOKEN>',
+                    'Accept'        => 'application/json',
+                ],
+                'sample_response' => [
+                    'status'  => true,
+                    'message' => 'LearnUp records fetched successfully.',
+                    'total'   => $visibleCount,
+                    'data'    => [
+                        [
+                            'id'            => $sampleRecord?->id ?? 1,
+                            'video_url'     => $sampleRecord?->video_url ?? url('uploads/learnup_with_ai/general/videos/sample.mp4'),
+                            'thumbnail_url' => $sampleRecord?->thumbnail_url ?? url('uploads/learnup_with_ai/general/thumbnails/sample.jpg'),
+                            'json_data'     => $sampleRecord?->parsed_json ?? ['word' => 'Apple'],
+                            'created_at'    => $sampleRecord?->created_at?->toIso8601String() ?? now()->toIso8601String(),
+                            'updated_at'    => $sampleRecord?->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                        ]
+                    ]
+                ]
+            ],
+            [
+                'name'        => 'Get Single LearnUp Item',
+                'method'      => 'GET',
+                'endpoint'    => '/api/learnup-words/{id}',
+                'full_url'    => url('/api/learnup-words/' . ($sampleRecord?->id ?? 1)),
+                'description' => 'Fetches detailed information for a single LearnUp item by ID. Returns 404 if not found or hidden.',
+                'params'      => [
+                    [
+                        'name'        => 'id',
+                        'type'        => 'integer',
+                        'required'    => true,
+                        'description' => 'Unique ID of the LearnUp record.'
+                    ]
+                ],
+                'headers'     => [
+                    'Authorization' => 'Bearer <YOUR_API_TOKEN>',
+                    'Accept'        => 'application/json',
+                ],
+                'sample_response' => [
+                    'status'  => true,
+                    'message' => 'LearnUp record fetched successfully.',
+                    'data'    => [
+                        'id'            => $sampleRecord?->id ?? 1,
+                        'video_url'     => $sampleRecord?->video_url ?? url('uploads/learnup_with_ai/general/videos/sample.mp4'),
+                        'thumbnail_url' => $sampleRecord?->thumbnail_url ?? url('uploads/learnup_with_ai/general/thumbnails/sample.jpg'),
+                        'json_data'     => $sampleRecord?->parsed_json ?? ['word' => 'Apple'],
+                        'created_at'    => $sampleRecord?->created_at?->toIso8601String() ?? now()->toIso8601String(),
+                        'updated_at'    => $sampleRecord?->updated_at?->toIso8601String() ?? now()->toIso8601String(),
+                    ]
+                ]
+            ]
+        ];
+
+        $pageTitle = 'LearnUp with AI API';
+
+        return view('api_list.index', compact('endpoints', 'visibleCount', 'pageTitle'));
     }
 }

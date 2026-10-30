@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'Dashboard') — NGD Technolab</title>
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <link rel="icon" type="image/png" sizes="64x64" href="{{ asset('favicon.png') }}">
+    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ asset('favicon.png') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -200,7 +204,7 @@
             Dashboard
         </a>
 
-        <div class="nav-section-title" style="margin-top:14px;">Modules</div>
+        <div class="nav-section-title" style="margin-top:14px;">asm080(langla)</div>
 
         <a href="{{ route('categories.index') }}" class="nav-item {{ request()->routeIs('categories.*') ? 'active' : '' }}">
             <span class="nav-icon">
@@ -221,7 +225,37 @@
             Video Learning with Word
         </a>
 
-        <a href="{{ route('api-list.index') }}" class="nav-item {{ request()->routeIs('api-list.*') ? 'active' : '' }}">
+        <a href="{{ route('api-list.index') }}" class="nav-item {{ request()->routeIs('api-list.index') ? 'active' : '' }}">
+            <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                </svg>
+            </span>
+            API List
+        </a>
+
+        <div class="nav-section-title" style="margin-top:14px;">LearnUp with AI</div>
+
+        <a href="{{ route('learnup-categories.index') }}" class="nav-item {{ request()->routeIs('learnup-categories.*') ? 'active' : '' }}">
+            <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+            </span>
+            LearnUp Categories
+        </a>
+
+        <a href="{{ route('learnup.index') }}" class="nav-item {{ request()->routeIs('learnup.*') ? 'active' : '' }}">
+            <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                </svg>
+            </span>
+            LearnUp with AI
+        </a>
+
+        <a href="{{ route('api-list.learnup') }}" class="nav-item {{ request()->routeIs('api-list.learnup') ? 'active' : '' }}">
             <span class="nav-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="16 18 22 12 16 6"/>
@@ -285,6 +319,8 @@ function closeSidebar() {
 </script>
 <!-- SweetAlert2 for confirmation dialogs -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<!-- Media protection: secure images (canvas) + media hardening -->
+<script src="{{ asset('js/admin-media-protect.js') }}?v=1"></script>
 @yield('scripts')
 </body>
 </html>

@@ -68,6 +68,41 @@ class VideoLearningWordController extends Controller
     }
 
     /**
+     * Securely stream a video's bytes by DB id (authenticated POST only).
+     * No file URL is ever exposed in the page; the path is resolved server-side.
+     */
+    public function stream(int $id): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $item = VideoLearningWord::findOrFail($id);
+
+        // Resolve the real on-disk path via the model (handles category + legacy folders).
+        $path = (string) $item->getVideoRelativePath();
+        if ($path === '' || str_starts_with($path, 'http')) {
+            abort(404);
+        }
+
+        $real = realpath(public_path($path));
+        $base = realpath(public_path('uploads'));
+
+        if ($real === false || $base === false || !str_starts_with($real, $base) || !is_file($real)) {
+            abort(404);
+        }
+
+        $ext   = strtolower(pathinfo($real, PATHINFO_EXTENSION));
+        $mimes = [
+            'mp4' => 'video/mp4', 'webm' => 'video/webm', 'ogg' => 'video/ogg',
+            'mov' => 'video/quicktime', 'mkv' => 'video/x-matroska', 'avi' => 'video/x-msvideo',
+        ];
+
+        return response()->file($real, [
+            'Content-Type'           => $mimes[$ext] ?? 'application/octet-stream',
+            'Cache-Control'          => 'private, no-store, max-age=0',
+            'Content-Disposition'    => 'inline',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
      * AJAX: return a single category's videos (ordered by saved sequence) for the
      * "Set Index" reorder popup.
      */
@@ -91,7 +126,7 @@ class VideoLearningWordController extends Controller
                 'title'         => $v->title,
                 'episode_no'    => $v->episode_no,
                 'video_name'    => $v->video_name ?: basename($v->video_path),
-                'thumbnail_url' => $v->thumbnail_url,
+                'thumbnail_url' => secure_media($v->getThumbnailRelativePath()) ?? $v->thumbnail_url,
                 'is_visible'    => $v->is_visible,
             ]);
 

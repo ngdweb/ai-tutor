@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
-@section('title', 'API List')
-@section('page-title', 'API List')
+@section('title', $pageTitle ?? 'API List')
+@section('page-title', $pageTitle ?? 'API List')
 
 @section('styles')
 <style>
@@ -203,7 +203,7 @@
             <line x1="3" y1="12" x2="3.01" y2="12"/>
             <line x1="3" y1="18" x2="3.01" y2="18"/>
         </svg>
-        <span>API List</span>
+        <span>{{ $pageTitle ?? 'API List' }}</span>
     </div>
 </div>
 

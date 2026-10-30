@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\CategoryApiController;
 use App\Http\Controllers\Api\VideoLearningApiController;
+use App\Http\Controllers\Api\LearnupCategoryApiController;
+use App\Http\Controllers\Api\LearnupApiController;
 use App\Http\Controllers\PrivateApiController;
 use App\Http\Middleware\VerifyApiBearerToken;
 use App\Http\Middleware\VerifySignedGetApi;
@@ -30,6 +32,15 @@ Route::middleware([VerifyApiBearerToken::class])->group(function () {
     Route::get('/video-learning-words', [VideoLearningApiController::class, 'index'])->name('api.video-learning.index');
     Route::get('/video-learning-words/{id}', [VideoLearningApiController::class, 'show'])->name('api.video-learning.show');
     Route::get('/video-learning', [VideoLearningApiController::class, 'index'])->name('api.video-learning.alias');
+
+    // LearnUp with AI APIs (same shape as the Video APIs, separate data)
+    Route::get('/learnup-categories', [LearnupCategoryApiController::class, 'index'])->name('api.learnup-categories.index');
+    Route::post('/learnup-categories/videos', [LearnupCategoryApiController::class, 'videos'])->name('api.learnup-categories.videos');
+    Route::get('/learnup-categories/{id}', [LearnupCategoryApiController::class, 'show'])->whereNumber('id')->name('api.learnup-categories.show');
+
+    Route::get('/learnup-words', [LearnupApiController::class, 'index'])->name('api.learnup.index');
+    Route::get('/learnup-words/{id}', [LearnupApiController::class, 'show'])->name('api.learnup.show');
+    Route::get('/learnup', [LearnupApiController::class, 'index'])->name('api.learnup.alias');
 });
 
 // HMAC-signed server-to-server endpoint: GET /api/get-api-key
